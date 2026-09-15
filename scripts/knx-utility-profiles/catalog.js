@@ -8,12 +8,7 @@ const profiles = Object.freeze({
   datetime: 'knxUltimateDateTime',
   watchdog: 'knxUltimateWatchDog',
   globalcontext: 'knxUltimateGlobalContext',
-  logger: 'knxUltimateLogger',
-  staircase: 'knxUltimateStaircase',
-  garage: 'knxUltimateGarage',
-  scenecontroller: 'knxUltimateSceneController',
-  loadcontrol: 'knxUltimateLoadControl',
-  hatranslator: 'knxUltimateHATranslator'
+  logger: 'knxUltimateLogger'
 })
 
 const locales = Object.freeze(['en', 'it', 'de', 'fr', 'es', 'zh-CN'])
