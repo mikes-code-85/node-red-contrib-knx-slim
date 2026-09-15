@@ -4,7 +4,6 @@ const oOS = require('os')
 const fs = require('fs')
 const path = require('path')
 const dptlib = require('knxultimate').dptlib
-const customHTTP = require('./utils/http')
 const KNXClient = require('knxultimate').KNXClient
 const { normalizeAuthFromAccessTokenQuery } = require('./utils/httpAdminAccessToken')
 
@@ -67,135 +66,10 @@ module.exports = (RED) => {
 
     // }
 
-    // 11/03/2020 Delete scene saved file, from html
-    RED.httpAdmin.get('/knxultimateCheckHueConnected', (req, res) => {
-      try {
-        const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
-        if (!serverId) {
-          res.json({ ready: false })
-          return
-        }
-        if (serverId.hueAllResources === null || serverId.hueAllResources === undefined) {
-          (async function main () {
-            try {
-              if (typeof serverId.loadResourcesFromHUEBridge === 'function') {
-                await serverId.loadResourcesFromHUEBridge()
-              }
-            } catch (error) {
-              RED.log.error(`Errore RED.httpAdmin.get('/knxultimateCheckHueConnected' ${error.stack}`)
-            }
-            res.json({ ready: false })
-          }()).catch()
-        } else {
-          res.json({ ready: true })
-        }
-      } catch (error) {
-        RED.log.error(`Errore RED.httpAdmin.get('/knxultimateCheckHueConnected' ${error.stack}`)
-        res.json({ ready: false })
-      }
+          fetchData()
     })
 
-    // 11/03/2020 Delete scene saved file, from html
-    RED.httpAdmin.get('/knxultimatescenecontrollerdelete'), (req, res) => {
-      // Delete the file
-      try {
-        const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
-        const newPath = `${serverId.userDir}/scenecontroller/SceneController_${req.query.FileName}`
-        fs.unlinkSync(newPath)
-      } catch (error) { if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.warn(`e ${error}`) }
-      res.json({ status: 220 })
-    }
-
-    // // Find all HUE Bridges in the network
-    // RED.httpAdmin.get('/KNXUltimateDiscoverHueBridges'), (req, res) => {
-    //     const url = 'https://discovery.meethue.com'; // Use HUE broker server discover process by visiting
-    //     async function fetchData() {
-    //         try {
-    //             const response = await fetch(url);  // Effettua la richiesta
-    //             const dataArray = await response.json();  // Parsing dei dati JSON
-    //             // Mostra l'array risultante
-    //             res.json(dataArray);
-    //         } catch (error) {
-    //             if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Error fetching discovery.meethue.com ${error.stack}`);
-    //             res.json("");
-    //         }
-    //     }
-    // fetchData();
-    // };
-
-    // Find all HUE Bridges in the network
-    RED.httpAdmin.get('/KNXUltimateGetHueBridgeInfo', RED.auth.needsPermission('hue-config.read'), (req, res) => {
-      async function fetchData () {
-        try {
-          const response = await customHTTP.getBridgeDetails(req.query.IP)
-          // Mostra l'array risultante
-          res.json(response)
-        } catch (error) {
-          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Error fetching discovery.meethue.com ${error.stack}`)
-          res.json({ error: error.message })
-        }
-      }
-      fetchData()
-    })
-
-    // Find all HUE Bridges in the network
-    RED.httpAdmin.get('/KNXUltimateGetPlainHueBridgeCredentials', RED.auth.needsPermission('hue-config.read'), (req, res) => {
-      try {
-        const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
-        const username = serverId.credentials.username
-        const clientkey = serverId.credentials.clientkey
-        res.json({ username, clientkey })
-      } catch (error) {
-        res.json({ error: error.message })
-      }
-    })
-
-    // Endpoint for registering with the HUE Bridge
-    RED.httpAdmin.get('/KNXUltimateRegisterToHueBridge', (req, res) => {
-      (async () => {
-        try {
-          const configNode = RED.nodes.getNode(req.query.serverId)
-          const ipAddress = req.query.IP
-          if (!ipAddress) throw new Error('Bridge IP address is required.')
-          const registration = await customHTTP.registerBridgeUser(ipAddress, 'KNXUltimate', 'Node-RED')
-          const bridgeInfo = {
-            data: registration.bridge,
-            name: registration.bridge?.name || configNode?.name || 'Hue Bridge',
-            ipaddress: registration.bridge?.ipaddress || ipAddress,
-            bridgeid: registration.bridge?.bridgeid || configNode?.bridgeid || ''
-          }
-          if (configNode) {
-            try {
-              configNode.credentials = configNode.credentials || {}
-              configNode.credentials.username = registration.user.username
-              configNode.credentials.clientkey = registration.user.clientkey
-              if (typeof bridgeInfo.bridgeid === 'string' && bridgeInfo.bridgeid) {
-                try { configNode.bridgeid = bridgeInfo.bridgeid } catch (e) { /* noop */ }
-              }
-            } catch (credError) {
-              if (node.sysLogger) node.sysLogger.warn(`Hue registration: unable to persist credentials for node ${configNode.id}: ${credError.message}`)
-            }
-          }
-          res.json({ bridge: bridgeInfo, user: registration.user })
-        } catch (error) {
-          if (node.sysLogger) node.sysLogger.error(`Hue bridge registration failed: ${error.message}`)
-          res.json({ error: error.message })
-        }
-      })()
-    })
-
-    RED.httpAdmin.get('/KNXUltimateDiscoverHueBridges', RED.auth.needsPermission('hue-config.read'), (req, res) => {
-      customHTTP.discoverHueBridges().then((list) => {
-        res.json(Array.isArray(list) ? list : [])
-      }).catch((error) => {
-        if (node.sysLogger) node.sysLogger.error(`Hue bridge discovery failed: ${error.message}`)
-        res.json({ error: error.message })
-      })
-    })
-
-    // Endpoint for reading csv/esf by the other nodes
-    RED.httpAdmin.get('/knxUltimatecsv', RED.auth.needsPermission('knxUltimate-config.read'), (req, res) => {
-      try {
+          try {
         if (typeof req.query.nodeID !== 'undefined' && req.query.nodeID !== null && req.query.nodeID !== '') {
           const _node = RED.nodes.getNode(req.query.nodeID) // Retrieve node.id of the config node.
           if (_node !== null) res.json(RED.nodes.getNode(_node.id).csv)
@@ -477,27 +351,6 @@ module.exports = (RED) => {
       }
     })
 
-    RED.httpAdmin.get('/knxUltimateGetHueColor', (req, res) => {
-      try {
-        const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
-        // find wether the light is a light or is grouped_light
-        let hexColor
-        const _oDevice = serverId.hueAllResources.filter((a) => a.id === req.query.id)[0]
-        if (_oDevice.type === 'light') {
-          hexColor = serverId.getColorFromHueLight(req.query.id)
-        } else {
-          // grouped_light, get the first light in the group
-          const oLight = serverId.getFirstLightInGroup(_oDevice.id)
-          hexColor = serverId.getColorFromHueLight(oLight.id)
-        }
-        res.json(hexColor !== undefined ? hexColor : 'Select the device first!')
-      } catch (error) {
-        res.json('Select the device first!')
-      }
-    })
-
-    // 2025-09 Secure: return list of Data Secure Group Addresses from keyring
-    RED.httpAdmin.get('/knxUltimateKeyringDataSecureGAs', RED.auth.needsPermission('knxUltimate-config.read'), async (req, res) => {
       try {
         let keyringContent = (req.query.keyring || '').toString()
         let password = (req.query.pwd || '').toString()
@@ -527,26 +380,6 @@ module.exports = (RED) => {
       }
     })
 
-    RED.httpAdmin.get('/knxUltimateGetKelvinColor', (req, res) => {
-      try {
-        // find wether the light is a light or is grouped_light
-        const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
-        let kelvinValue
-        const _oDevice = serverId.hueAllResources.filter((a) => a.id === req.query.id)[0]
-        if (_oDevice.type === 'light') {
-          kelvinValue = serverId.getKelvinFromHueLight(req.query.id)
-        } else {
-          // grouped_light, get the first light in the group
-          const oLight = serverId.getFirstLightInGroup(_oDevice.id)
-          kelvinValue = serverId.getKelvinFromHueLight(oLight.id)
-        }
-        res.json(kelvinValue !== undefined ? kelvinValue : 'Select the device first!')
-      } catch (error) {
-        res.json('Select the device first!')
-      }
-    })
-
-    RED.httpAdmin.get('/knxUltimateGetLightObject', (req, res) => {
       try {
         const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
         if (serverId.hueAllResources === null || serverId.hueAllResources === undefined) {
@@ -573,12 +406,6 @@ module.exports = (RED) => {
         }
         res.json(oLight)
       } catch (error) {
-        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`KNXUltimateHue: hueEngine: knxUltimateGetLightObject: error ${error.message}.`)
-        res.json({})
-      }
-    })
-
-    RED.httpAdmin.post('/KNXUltimateLocateHueDevice', async (req, res) => {
       const respondError = (status, message) => {
         res.status(status).json({ error: message })
       }
@@ -741,38 +568,6 @@ module.exports = (RED) => {
       }
     })
 
-    RED.httpAdmin.get('/KNXUltimateGetResourcesHUE', async (req, res) => {
-      try {
-        // °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
-        const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
-        if (serverId === null) {
-          RED.log.warn('Warn KNXUltimateGetResourcesHUE serverId is null')
-          const jRet = []
-          jRet.push({ name: 'PLEASE DEPLOY FIRST: then try again.', id: 'error' })
-          res.json({ devices: jRet })
-          return
-        }
-        const refreshFlag = (req.query.forceRefresh || '').toString().toLowerCase()
-        const forceRefresh = refreshFlag === '1' || refreshFlag === 'true' || refreshFlag === 'yes'
-        const jRet = await serverId.getResources(req.query.rtype, { forceRefresh })
-        if (jRet !== undefined) {
-          res.json(jRet)
-        } else {
-          res.json({ devices: [{ name: "I'm still connecting...Try in some seconds" }] })
-        }
-        // °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
-      } catch (error) {
-        // RED.log.error(`Errore KNXUltimateGetResourcesHUE non gestito ${error.message}`);
-        res.json({ devices: error.message })
-        RED.log.error(`Err KNXUltimateGetResourcesHUE: ${error.message}`)
-        // (async () => {
-        //   await node.initHUEConnection();
-        // })();
-      }
-    })
-
-    // MATTER: returns the list of commissioned Matter devices of a matter-config node
-    RED.httpAdmin.get('/KNXUltimateMatterGetNodes', RED.auth.needsPermission('matter-config.read'), (req, res) => {
       try {
         const matterServer = RED.nodes.getNode(req.query.serverId)
         if (matterServer === null || matterServer === undefined) {
@@ -781,13 +576,6 @@ module.exports = (RED) => {
         }
         res.json({ devices: matterServer.getCommissionedNodesDetails() })
       } catch (error) {
-        RED.log.error(`Err KNXUltimateMatterGetNodes: ${error.message}`)
-        res.json({ error: error.message })
-      }
-    })
-
-    // MATTER: returns endpoints/clusters/attributes/commands of a commissioned Matter device
-    RED.httpAdmin.get('/KNXUltimateMatterGetStructure', RED.auth.needsPermission('matter-config.read'), (req, res) => {
       try {
         const matterServer = RED.nodes.getNode(req.query.serverId)
         if (matterServer === null || matterServer === undefined) {
@@ -796,14 +584,6 @@ module.exports = (RED) => {
         }
         res.json(matterServer.getNodeStructure(req.query.nodeId))
       } catch (error) {
-        RED.log.error(`Err KNXUltimateMatterGetStructure: ${error.message}`)
-        res.json({ error: error.message })
-      }
-    })
-
-    // MATTER: current commissioning milestone for the blocking editor overlay.
-    // The operation id keeps simultaneous editor tabs from displaying each other's progress.
-    RED.httpAdmin.get('/KNXUltimateMatterPairProgress', RED.auth.needsPermission('matter-config.read'), (req, res) => {
       try {
         const matterServer = RED.nodes.getNode(req.query.serverId)
         if (matterServer === null || matterServer === undefined) {
@@ -812,13 +592,6 @@ module.exports = (RED) => {
         }
         res.json(matterServer.getCommissioningProgress(req.query.operationId))
       } catch (error) {
-        RED.log.error(`Err KNXUltimateMatterPairProgress: ${error.message}`)
-        res.json({ active: false, percent: 0, error: error.message })
-      }
-    })
-
-    // MATTER: commissions (pairs) a new Matter device using a pairing code or QR code string
-    RED.httpAdmin.get('/KNXUltimateMatterPair', RED.auth.needsPermission('matter-config.write'), async (req, res) => {
       let matterServer
       const requestedOperationId = String(req.query.operationId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)
       // Keep direct callers of the pre-progress endpoint backward compatible. The editor
@@ -850,34 +623,6 @@ module.exports = (RED) => {
             await matterServer.renameCommissionedNode(nodeId, requestedName)
           } catch (error) {
             renameError = error.message
-            RED.log.warn(`Warn KNXUltimateMatterPair rename node ${nodeId}: ${error.message}`)
-          }
-        }
-        let device = null
-        try {
-          device = matterServer.getCommissionedNodesDetails().find((item) => String(item.nodeId) === String(nodeId)) || null
-        } catch (error) { /* empty */ }
-        matterServer.endCommissioningProgress(operationId, {
-          phase: 'complete',
-          percent: 100,
-          message: 'Matter commissioning completed successfully.'
-        })
-        res.json({ nodeId, name: device?.name, productName: device?.productName, vendorName: device?.vendorName, renameError })
-      } catch (error) {
-        try {
-          matterServer?.endCommissioningProgress(operationId, {
-            phase: 'error',
-            message: `Commissioning failed: ${error.message}`
-          })
-        } catch (progressError) { /* empty */ }
-        const targetHost = req.query.targetHost ? ` targetHost=${req.query.targetHost}` : ''
-        RED.log.error(`Err KNXUltimateMatterPair:${targetHost} ${error.stack || error.message}`)
-        res.json({ error: error.message })
-      }
-    })
-
-    // MATTER: renames a commissioned Matter device by writing BasicInformation.nodeLabel
-    RED.httpAdmin.get('/KNXUltimateMatterRename', RED.auth.needsPermission('matter-config.write'), async (req, res) => {
       try {
         const matterServer = RED.nodes.getNode(req.query.serverId)
         if (matterServer === null || matterServer === undefined) {
@@ -893,13 +638,6 @@ module.exports = (RED) => {
         await matterServer.renameCommissionedNode(nodeId, name)
         res.json({ status: 'ok', nodeId, name })
       } catch (error) {
-        RED.log.error(`Err KNXUltimateMatterRename: ${error.stack || error.message}`)
-        res.json({ error: error.message })
-      }
-    })
-
-    // MATTER: decommissions (unpairs) a Matter device
-    RED.httpAdmin.get('/KNXUltimateMatterUnpair', RED.auth.needsPermission('matter-config.write'), async (req, res) => {
       try {
         const matterServer = RED.nodes.getNode(req.query.serverId)
         if (matterServer === null || matterServer === undefined) {
@@ -909,43 +647,6 @@ module.exports = (RED) => {
         await matterServer.removeCommissionedNode(req.query.nodeId)
         res.json({ status: 'ok' })
       } catch (error) {
-        RED.log.error(`Err KNXUltimateMatterUnpair: ${error.message}`)
-        res.json({ error: error.message })
-      }
-    })
-
-    const exportMatterStorage = async (req, res, idKey) => {
-      try {
-        const configNode = RED.nodes.getNode(req.query[idKey])
-        if (!configNode || typeof configNode.exportMatterStorage !== 'function') throw new Error('PLEASE DEPLOY FIRST: then try again.')
-        const backup = await configNode.exportMatterStorage()
-        const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.setHeader('Content-Disposition', `attachment; filename="knx-ultimate-matter-${backup.kind}-${stamp}.json"`)
-        res.send(JSON.stringify(backup, null, 2))
-      } catch (error) {
-        RED.log.error(`Err Matter storage export: ${error.message}`)
-        if (!res.headersSent) res.status(500).json({ error: error.message })
-      }
-    }
-
-    const importMatterStorage = async (req, res, idKey) => {
-      try {
-        const configNode = RED.nodes.getNode(req.query[idKey])
-        if (!configNode || typeof configNode.importMatterStorage !== 'function') throw new Error('PLEASE DEPLOY FIRST: then try again.')
-        await configNode.importMatterStorage(req.body)
-        res.json({ status: 'ok' })
-      } catch (error) {
-        RED.log.error(`Err Matter storage import: ${error.message}`)
-        res.status(400).json({ error: error.message })
-      }
-    }
-
-    RED.httpAdmin.get('/KNXUltimateMatterStorageExport', normalizeAuthFromAccessTokenQuery, RED.auth.needsPermission('matter-config.read'), (req, res) => exportMatterStorage(req, res, 'serverId'))
-    RED.httpAdmin.post('/KNXUltimateMatterStorageImport', RED.auth.needsPermission('matter-config.write'), (req, res) => importMatterStorage(req, res, 'serverId'))
-
-    // MATTER BRIDGE: returns the pairing info (QR code, manual code, commissioned fabrics) of a matterbridge-config node
-    RED.httpAdmin.get('/KNXUltimateMatterBridgeInfo', RED.auth.needsPermission('matterbridge-config.read'), (req, res) => {
       try {
         const bridgeConfig = RED.nodes.getNode(req.query.configId)
         if (bridgeConfig === null || bridgeConfig === undefined || typeof bridgeConfig.getPairingInfo !== 'function') {
@@ -954,13 +655,6 @@ module.exports = (RED) => {
         }
         res.json(bridgeConfig.getPairingInfo())
       } catch (error) {
-        RED.log.error(`Err KNXUltimateMatterBridgeInfo: ${error.message}`)
-        res.json({ error: error.message })
-      }
-    })
-
-    // MATTER BRIDGE: factory reset (removes all paired controllers, restarts pairing advertising)
-    RED.httpAdmin.get('/KNXUltimateMatterBridgeReset', RED.auth.needsPermission('matterbridge-config.write'), async (req, res) => {
       try {
         const bridgeConfig = RED.nodes.getNode(req.query.configId)
         if (bridgeConfig === null || bridgeConfig === undefined || typeof bridgeConfig.factoryResetBridge !== 'function') {
@@ -970,15 +664,6 @@ module.exports = (RED) => {
         await bridgeConfig.factoryResetBridge()
         res.json({ status: 'ok' })
       } catch (error) {
-        RED.log.error(`Err KNXUltimateMatterBridgeReset: ${error.message}`)
-        res.json({ error: error.message })
-      }
-    })
-
-    RED.httpAdmin.get('/KNXUltimateMatterBridgeStorageExport', normalizeAuthFromAccessTokenQuery, RED.auth.needsPermission('matterbridge-config.read'), (req, res) => exportMatterStorage(req, res, 'configId'))
-    RED.httpAdmin.post('/KNXUltimateMatterBridgeStorageImport', RED.auth.needsPermission('matterbridge-config.write'), (req, res) => importMatterStorage(req, res, 'configId'))
-
-    RED.httpAdmin.get('/knxUltimateDpts', (req, res) => {
       try {
         const dpts = Object.entries(dptlib.dpts).filter(onlyDptKeys).map(extractBaseNo).sort(sortBy('base'))
           .reduce(toConcattedSubtypes, [])
@@ -1042,3 +727,4 @@ module.exports = (RED) => {
     // });
   }
 }
+

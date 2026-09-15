@@ -8,12 +8,7 @@ const RUNTIME_MODULES = Object.freeze({
   datetime: './knxUtilityProfiles/runtime/datetime',
   watchdog: './knxUtilityProfiles/runtime/watchdog',
   globalcontext: './knxUtilityProfiles/runtime/globalcontext',
-  logger: './knxUtilityProfiles/runtime/logger',
-  staircase: './knxUtilityProfiles/runtime/staircase',
-  garage: './knxUtilityProfiles/runtime/garage',
-  scenecontroller: './knxUtilityProfiles/runtime/scenecontroller',
-  loadcontrol: './knxUtilityProfiles/runtime/loadcontrol',
-  hatranslator: './knxUtilityProfiles/runtime/hatranslator'
+  logger: './knxUtilityProfiles/runtime/logger'
 })
 
 const constructors = new WeakMap()

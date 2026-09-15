@@ -63,29 +63,29 @@
                   try {
                       RED.sidebar.show("help");
                   } catch (error) { }
-
+      
                   var node = this;
                   var oNodeServer = RED.nodes.node($("#node-input-server").val()); // Store the config-node
-
+      
                   // 19/02/2020 Used to get the server sooner als deploy.
                   $("#node-input-server").off('.knxUtilityProfile').on('change.knxUtilityProfile', function () {
                       try {
                           oNodeServer = RED.nodes.node($(this).val());
                       } catch (error) { }
                   });
-
-
-
-
+      
+      
+      
+      
                   // Scene configuration
                   function resizeRule(rule) {
-
+      
                   }
                   $("#node-input-rule-container").css('min-height', '350px').css('min-width', '450px').editableList({
                       addItem: function (container, i, opt) { // row, index, data
-
+      
                           // opt.r is: { topic: rowRuleTopic, devicename: rowRuleDeviceName, longdevicename: rowRuleLongDeviceName}
-
+      
                           var rule = opt.r || { topic: '', devicename: '', longdevicename: '' };
                           if (!opt.hasOwnProperty('i')) {
                               opt._i = Math.floor((0x99999 - 0x10000) * Math.random()).toString();
@@ -95,18 +95,18 @@
                               whiteSpace: 'nowrap'
                           });
                           var row = $('<div class="form-row"/>').appendTo(container);
-
+      
                           var oTopicField = $("<input/>", { class: "rowRuleTopic", type: "text", placeholder: "GA or devicename", style: "width:20%; margin-left: 5px; text-align: left;" }).appendTo(row);
                           var finalspan = $('<span/>', { style: "" }).appendTo(row);
                           finalspan.append(' <span class="node-input-rule-index"></span> ');
                           var orowRuleDeviceName = $('<input/>', { maxlength: "14", class: "rowRuleDeviceName", type: "text", style: "width:30%; margin-left: 0px; text-align: left;font-style: italic;", placeholder: "Name (max 14 chars)" }).appendTo(row);
                           var orowRuleLongDeviceName = $('<input/>', { class: "rowRuleLongDeviceName", type: "text", style: "width:45%; margin-left: 0px; text-align: left;", placeholder: "Long name" }).appendTo(row);
-
+      
                           oTopicField.on("change", function () {
                               resizeRule(container);
                           });
-
-
+      
+      
                           // Autocomplete suggestion with ETS csv File
                           oTopicField.autocomplete({
                               minLength: 0,
@@ -134,7 +134,7 @@
                                       orowRuleLongDeviceName.val(sDevName);
                                   } catch (error) {
                                   }
-
+      
                               }
                           });
                           oTopicField.on('focus.knxUltimateAlerter click.knxUltimateAlerter', function () {
@@ -143,15 +143,15 @@
                               } catch (error) { /* empty */ }
                           });
                           try { if (oNodeServer && oNodeServer.id) KNX_enableSecureFormatting(oTopicField, oNodeServer.id); } catch (e) {}
-
+      
                           oTopicField.val(rule.topic);
                           orowRuleDeviceName.val(rule.devicename);
                           orowRuleLongDeviceName.val(rule.longdevicename);
                           oTopicField.change();
-
+      
                       },
                       removeItem: function (opt) {
-
+      
                       },
                       resizeItem: resizeRule,
                       sortItems: function (rules) {
@@ -159,23 +159,23 @@
                       sortable: true,
                       removable: true
                   });
-
+      
                   // 10/03/2020 For each rule, create a row
                   for (var i = 0; i < (this.rules || []).length; i++) {
                       var rule = this.rules[i];
                       $("#node-input-rule-container").editableList('addItem', { r: rule, i: i });
                   }
-
-
+      
+      
               },
               oneditsave: function () {
                   // Return to the info tab
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
+      
                   var node = this;
-
+      
                   var rules = $("#node-input-rule-container").editableList('items');
                   node.rules = [];
                   rules.each(function (i) {
@@ -235,39 +235,39 @@
       	            try {
       	                RED.sidebar.show("help");
       	            } catch (error) { }
-
+      
       	            var node = this;
-
+      
       	            $("#node-input-commandText").typedInput({
       	                type: "json",
       	                types: ["json"]
       	            })
-
+      
       	            try {
       	                if (node.commandText !== undefined) {
       	                    $("#node-input-commandText").typedInput('value', node.commandText)
       	                }
       	            } catch (error) { }
-
+      
       	        },
       	        oneditsave: function () {
       	            // Return to the info tab
       	            try {
       	                RED.sidebar.show("info");
       	            } catch (error) { }
-
+      
       	            try {
       	                this.commandText = $("#node-input-commandText").typedInput('value')
       	            } catch (error) { }
-
+      
       	        },
               oneditcancel: function () {
                   // Return to the info tab
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
-
+      
+      
               }
           })
     },
@@ -277,11 +277,11 @@
           date: [/\bdate\b/i, /\bdata\b/i, /\bdatum\b/i, /\bfecha\b/i],
           time: [/\btime\b/i, /\bora\b/i, /\bheure\b/i, /\bzeit\b/i, /\bhora\b/i, /\borologio\b/i, /\bclock\b/i]
         }
-
+      
         const KNX_ULTIMATE_DATETIME_STOPWORDS = new Set([
           'date', 'datetime', 'time', 'data', 'ora', 'orologio', 'clock', 'bus', 'knx', 'set', 'sync', 'sincro', 'synchronization'
         ])
-
+      
         const knxDateTimeNormalizeTokens = (value) => {
           const str = (value || '').toString().toLowerCase()
           const cleaned = str
@@ -294,7 +294,7 @@
             .map((t) => t.trim())
             .filter((t) => t.length > 1 && !KNX_ULTIMATE_DATETIME_STOPWORDS.has(t))
         }
-
+      
         const knxDateTimeTokenSimilarity = (aTokens, bTokens) => {
           if (!Array.isArray(aTokens) || !Array.isArray(bTokens) || aTokens.length === 0 || bTokens.length === 0) return 0
           const a = new Set(aTokens)
@@ -304,7 +304,7 @@
           const union = a.size + b.size - inter
           return union > 0 ? inter / union : 0
         }
-
+      
         const knxDateTimeParseGA = (ga) => {
           const parts = (ga || '').toString().trim().split('/')
           if (parts.length !== 3) return null
@@ -312,7 +312,7 @@
           if (nums.some((n) => !Number.isInteger(n) || n < 0)) return null
           return nums
         }
-
+      
         const knxDateTimeCompareGA = (a, b) => {
           const aa = knxDateTimeParseGA(a)
           const bb = knxDateTimeParseGA(b)
@@ -324,7 +324,7 @@
           }
           return 0
         }
-
+      
         const knxGetKnxUltimateConfigs = () => {
           const configs = []
           try {
@@ -348,7 +348,7 @@
           } catch (error) { /* ignore */ }
           return configs
         }
-
+      
         const knxFetchGroupAddresses = (serverId) => {
           return new Promise((resolve) => {
             if (!serverId) return resolve([])
@@ -357,15 +357,15 @@
             }).fail(() => resolve([]))
           })
         }
-
+      
         const knxScoreEntry = (entry, kind, baseTokens) => {
           if (!entry) return -1
           const dpt = (entry.dpt || '').toString()
           const name = (entry.devicename || '').toString()
           const tokens = knxDateTimeNormalizeTokens(name)
-
+      
           let score = 0
-
+      
           if (kind === 'datetime') {
             if (dpt === '19.001') score += 60
             else if (dpt.startsWith('19.')) score += 45
@@ -381,14 +381,14 @@
             else if (dpt.startsWith('10.')) score += 45
             KNX_ULTIMATE_DATETIME_KEYWORDS.time.forEach((re) => { if (re.test(name)) score += 18 })
           }
-
+      
           if (Array.isArray(baseTokens) && baseTokens.length > 0) {
             score += Math.round(knxDateTimeTokenSimilarity(tokens, baseTokens) * 30)
           }
-
+      
           return score
         }
-
+      
         const knxPickBest = (entries, kind, baseTokens) => {
           if (!Array.isArray(entries) || entries.length === 0) return null
           let best = null
@@ -405,33 +405,33 @@
           })
           return best
         }
-
+      
         const knxSuggestFromCsv = (csvRows) => {
           const rows = Array.isArray(csvRows) ? csvRows : []
           const datetimeRows = rows.filter((r) => (r && typeof r.dpt === 'string' && r.dpt.startsWith('19.')))
           const dateRows = rows.filter((r) => (r && typeof r.dpt === 'string' && r.dpt.startsWith('11.')))
           const timeRows = rows.filter((r) => (r && typeof r.dpt === 'string' && r.dpt.startsWith('10.')))
-
+      
           const bestDateTime = knxPickBest(datetimeRows, 'datetime', [])
           const baseTokens = bestDateTime ? knxDateTimeNormalizeTokens(bestDateTime.devicename || '') : []
-
+      
           const bestDate = knxPickBest(dateRows, 'date', baseTokens)
           const bestTime = knxPickBest(timeRows, 'time', baseTokens)
-
+      
           return {
             dateTime: bestDateTime,
             date: bestDate,
             time: bestTime
           }
         }
-
+      
         const knxAutoConfigureDateTimeNode = async (node, { updateDom = false, preferExistingServer = true, canApply = () => true } = {}) => {
           try {
             if (!node || !canApply()) return
-
+      
             const hasAnyGA = !!((node.gaDateTime || '').trim() || (node.gaDate || '').trim() || (node.gaTime || '').trim())
             if (hasAnyGA) return
-
+      
             // If server already selected and it has ETS rows, reuse it.
             const currentServerId = preferExistingServer ? (node.server || '') : ''
             if (currentServerId && currentServerId !== '_ADD_') {
@@ -441,11 +441,11 @@
                 return knxApplySuggestions(node, currentServerId, suggestions, { updateDom, canApply })
               }
             }
-
+      
             // Otherwise, select the first knxUltimate-config that has an ETS CSV imported (non-empty parsed GA list).
             const configs = knxGetKnxUltimateConfigs()
             if (configs.length === 0) return
-
+      
             // Fast path: config node already carries an ETS file/path in its `csv` property.
             for (let i = 0; i < configs.length; i++) {
               const cfg = configs[i]
@@ -457,14 +457,14 @@
               const suggestions = knxSuggestFromCsv(rows)
               return knxApplySuggestions(node, id, suggestions, { updateDom, canApply })
             }
-
+      
             const maxCandidates = Math.min(10, configs.length)
             const checks = configs.slice(0, maxCandidates).map((cfg) => {
               const id = cfg && cfg.id ? cfg.id : null
               return knxFetchGroupAddresses(id).then((rows) => ({ id, rows }))
             })
             const results = await Promise.all(checks)
-
+      
             let selected = null
             for (let i = 0; i < results.length; i++) {
               if (results[i] && results[i].id && Array.isArray(results[i].rows) && results[i].rows.length > 0) {
@@ -473,14 +473,14 @@
               }
             }
             if (!selected) return
-
+      
             const suggestions = knxSuggestFromCsv(selected.rows)
             return knxApplySuggestions(node, selected.id, suggestions, { updateDom, canApply })
           } catch (error) {
             try { console.warn('knxUltimateDateTime auto-config failed', error) } catch (e) { /* ignore */ }
           }
         }
-
+      
         const knxAutoConfigureDateTimeNodeForServer = async (node, serverId, { updateDom = false, overwrite = false, canApply = () => true } = {}) => {
           try {
             if (!node || !serverId || !canApply()) return
@@ -492,18 +492,18 @@
             try { console.warn('knxUltimateDateTime auto-config for server failed', error) } catch (e) { /* ignore */ }
           }
         }
-
+      
         const knxApplySuggestions = (node, serverId, suggestions, { updateDom = false, overwrite = false, canApply = () => true } = {}) => {
           // The Utility wrapper can replace this fragment while ETS requests are in
           // flight. Never let a late response update its successor's fields.
           if (!node || !serverId || !canApply()) return
           if (!suggestions) return
-
+      
           // Avoid repeating the same automation multiple times.
           if (node._knxDateTimeAutoConfigured === true && overwrite !== true) return
-
+      
           node.server = serverId
-
+      
           if (suggestions.dateTime && suggestions.dateTime.ga && (overwrite || !(node.gaDateTime || '').trim())) {
             node.gaDateTime = suggestions.dateTime.ga
             node.nameDateTime = suggestions.dateTime.devicename || ''
@@ -516,10 +516,10 @@
             node.gaTime = suggestions.time.ga
             node.nameTime = suggestions.time.devicename || ''
           }
-
+      
           node._knxDateTimeAutoConfigured = true
           node._knxDateTimeAutoConfiguredServer = serverId
-
+      
           if (updateDom) {
             try {
               $('#node-input-server').val(serverId).trigger('change')
@@ -537,7 +537,7 @@
             try { if (RED && RED.view && typeof RED.view.redraw === 'function') RED.view.redraw() } catch (error) { /* ignore */ }
           }
         }
-
+      
         const knxDateTimeOptionalNumber = (toggle) => function (value) {
           let enabled = this[toggle] === undefined || this[toggle] === true || this[toggle] === 'true';
           // The wrapper validates the saved node while its draft is open. Read the
@@ -548,7 +548,7 @@
           }
           return !enabled || RED.validators.number()(value)
         }
-
+      
         RED.nodes.registerType('knxUltimateDateTime', {
           category: 'KNX Ultimate',
           color: '#C7E9C0',
@@ -634,24 +634,24 @@
             const $knxServerInput = $('#node-input-server')
             const KNX_EMPTY_VALUES = new Set(['', '_ADD_', '__NONE__', 'none'])
             const KNX_GA_CACHE = node._knxGaCache || (node._knxGaCache = new Map())
-
+      
             try { RED.sidebar.show('help') } catch (error) { /* ignore */ }
-
+      
             const resolveKnxServerValue = () => {
               const domValue = $knxServerInput.val()
               if (domValue !== undefined && domValue !== null && domValue !== '') return domValue
               if (node.server !== undefined && node.server !== null && node.server !== '') return node.server
               return ''
             }
-
+      
             const addressFields = ['gaDateTime', 'nameDateTime', 'dptDateTime', 'gaDate', 'nameDate', 'dptDate', 'gaTime', 'nameTime', 'dptTime']
             const addressSnapshot = () => JSON.stringify(addressFields.map((field) => $('#node-input-' + field).val() || ''))
-
+      
             const hasKnxServerSelected = () => {
               const val = resolveKnxServerValue()
               return !(val === undefined || val === null || KNX_EMPTY_VALUES.has(String(val)))
             }
-
+      
             const fetchGroupAddresses = (serverId) => {
               if (!serverId) return Promise.resolve([])
               if (KNX_GA_CACHE.has(serverId)) return Promise.resolve(KNX_GA_CACHE.get(serverId))
@@ -663,15 +663,15 @@
                 }).fail(() => resolve([]))
               })
             }
-
+      
             const setupGA = (gaSelector, nameSelector, dptSelector, allowedPrefixes, defaultDpt) => {
               const $gaInput = $(gaSelector)
               const $nameInput = $(nameSelector)
               const $dptInput = $(dptSelector)
               if (!$gaInput.length) return
-
+      
               if ($dptInput.length && (!$dptInput.val() || $dptInput.val() === '')) $dptInput.val(defaultDpt)
-
+      
               const sourceFn = (request, response) => {
                 if (!hasKnxServerSelected()) {
                   response([])
@@ -697,7 +697,7 @@
                   response(items)
                 })
               }
-
+      
               if ($gaInput.data('knx-ga-initialised')) {
                 $gaInput.autocomplete('option', 'source', sourceFn)
               } else {
@@ -728,7 +728,7 @@
                   })
                 $gaInput.data('knx-ga-initialised', true)
               }
-
+      
               try {
                 if (hasKnxServerSelected()) {
                   const srv = RED.nodes.node(resolveKnxServerValue())
@@ -736,13 +736,13 @@
                 }
               } catch (error) { /* ignore */ }
             }
-
+      
             const refresh = () => {
               setupGA('#node-input-gaDateTime', '#node-input-nameDateTime', '#node-input-dptDateTime', ['19.'], '19.001')
               setupGA('#node-input-gaDate', '#node-input-nameDate', '#node-input-dptDate', ['11.'], '11.001')
               setupGA('#node-input-gaTime', '#node-input-nameTime', '#node-input-dptTime', ['10.'], '10.001')
             }
-
+      
             $knxServerInput.off('.knxUtilityProfile').on('change.knxUtilityProfile', () => {
               KNX_GA_CACHE.clear()
               refresh()
@@ -765,9 +765,9 @@
                 })
               } catch (error) { /* ignore */ }
             })
-
+      
             refresh()
-
+      
             // Auto-select server + fill GAs only for a brand new node (all GAs empty).
             const initialServer = resolveKnxServerValue()
             const initialAddresses = addressSnapshot()
@@ -778,14 +778,14 @@
                 canApply: () => editorSession.active && resolveKnxServerValue() === initialServer && addressSnapshot() === initialAddresses
               })
             }, 50)
-
+      
             const syncUi = () => {
               const sendOnDeploy = $('#node-input-sendOnDeploy').is(':checked')
               $('.knx-datetime-deploy-options').toggle(sendOnDeploy)
               const periodicSend = $('#node-input-periodicSend').is(':checked')
               $('.knx-datetime-periodic-options').toggle(periodicSend)
             }
-
+      
             $('#node-input-sendOnDeploy').on('change.knxUtilityProfile', syncUi)
             $('#node-input-periodicSend').on('change.knxUtilityProfile', syncUi)
             syncUi()
@@ -816,7 +816,7 @@
         return value !== null && value !== undefined && String(value).trim() !== '' &&
           Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
       };
-
+      
       RED.nodes.registerType('knxUltimateWatchDog', {
               category: "KNX Ultimate",
               color: '#C7E9C0',
@@ -853,21 +853,21 @@
                   const $knxServerInput = $("#node-input-server");
                   const $gaInput = $("#node-input-topic");
                   const KNX_EMPTY_VALUES = new Set(['', '_ADD_', '__NONE__', 'none']);
-
+      
                   // Go to the help panel
                   try {
                       RED.sidebar.show("help");
                   } catch (error) { }
-
+      
                   $("#advancedOptionsAccordion").accordion({
                       header: "h3",
                       heightStyle: "content",
                       collapsible: true,
                       active: false
                   });
-
+      
                   const KNX_GA_CACHE = node._knxGaCache || (node._knxGaCache = new Map());
-
+      
                   const resolveKnxServerValue = () => {
                       const domValue = $knxServerInput.val();
                       if (domValue !== undefined && domValue !== null) {
@@ -878,7 +878,7 @@
                       }
                       return '';
                   };
-
+      
                   const fetchGroupAddresses = (serverId) => {
                       if (!serverId) return Promise.resolve([]);
                       if (KNX_GA_CACHE.has(serverId)) return Promise.resolve(KNX_GA_CACHE.get(serverId));
@@ -890,7 +890,7 @@
                           }).fail(() => resolve([]));
                       });
                   };
-
+      
                   const ensureGaAutocomplete = () => {
                       const serverId = resolveKnxServerValue();
                       if (!serverId) {
@@ -899,7 +899,7 @@
                           }
                           return;
                       }
-
+      
                       const sourceFn = (request, response) => {
                           fetchGroupAddresses(serverId).then((data) => {
                               if (!editorSession.active || resolveKnxServerValue() !== serverId) return;
@@ -918,7 +918,7 @@
                               response(items);
                           });
                       };
-
+      
                       if ($gaInput.data('knx-watchdog-ga')) {
                           $gaInput.autocomplete('option', 'source', sourceFn);
                           $gaInput.autocomplete('enable');
@@ -947,19 +947,19 @@
                           });
                           $gaInput.data('knx-watchdog-ga', true);
                       }
-
+      
                       try {
                           const srv = RED.nodes.node(serverId);
                           if (srv && srv.id) KNX_enableSecureFormatting($gaInput, srv.id);
                       } catch (error) { }
                   };
-
+      
                   $knxServerInput.off('.knxUtilityProfile').on('change.knxUtilityProfile', () => {
                       KNX_GA_CACHE.clear();
                       ensureGaAutocomplete();
                   });
                   ensureGaAutocomplete();
-
+      
                   const syncDivHost = () => {
                       const level = $("#node-input-checkLevel").val() || node.checkLevel || "Ethernet";
                       if (level === "Ethernet") {
@@ -968,7 +968,7 @@
                           $("#divHost").show();
                       }
                   };
-
+      
                   $("#node-input-checkLevel").on('change.knxUtilityProfile', function () {
                       syncDivHost();
                   });
@@ -984,10 +984,10 @@
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
-
+      
+      
               }
-
+      
           })
     },
     "globalcontext": function (RED) {
@@ -1004,7 +1004,7 @@
         return value !== null && value !== undefined && String(value).trim() !== '' &&
           Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
       };
-
+      
       RED.nodes.registerType('knxUltimateGlobalContext', {
               category: "KNX Ultimate",
               color: '#C7E9C0',
@@ -1027,26 +1027,26 @@
                   try {
                       RED.sidebar.show("help");
                   } catch (error) { }
-
-
-
+      
+      
+      
               },
               oneditsave: function () {
                   // Return to the info tab
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
-
-
+      
+      
+      
               },
               oneditcancel: function () {
                   // Return to the info tab
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
-
+      
+      
               }
           })
     },
@@ -1064,7 +1064,7 @@
         return value !== null && value !== undefined && String(value).trim() !== '' &&
           Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
       };
-
+      
       RED.nodes.registerType('knxUltimateLogger', {
               category: "KNX Ultimate",
               color: '#C7E9C0',
@@ -1079,7 +1079,7 @@
                   filePath: { value: "" },
                   autoStartTimerTelegramCounter: { value: false },
                   intervalTelegramCount: { value: 60, validate: utilityNumber(0.001, false, (node) => utilityFieldValue(node, 'autoStartTimerTelegramCounter') === true) }
-
+      
               },
               inputs: 1,
               outputs: 2,
@@ -1104,14 +1104,14 @@
                   try {
                       RED.sidebar.show("help");
                   } catch (error) { }
-
+      
                   $("#mlxETSFileAccordion").accordion({
                       header: "h3",
                       heightStyle: "content",
                       collapsible: true,
                       active: false
                   });
-
+      
                   const nodeId = this.id;
                   const resolveAdminRoot = () => {
                       const raw = (RED.settings && typeof RED.settings.httpAdminRoot === "string") ? RED.settings.httpAdminRoot : "/";
@@ -1128,7 +1128,7 @@
                           return "";
                       }
                   };
-
+      
                   const toggleFilePath = () => {
                       const isEmitSave = $("#node-input-saveMode").val() === "emit_save";
                       const $filePathRow = $("#knx-logger-filePath-row");
@@ -1139,11 +1139,11 @@
                       }
                   };
                   $("#node-input-saveMode").on("change.knxUtilityProfile", toggleFilePath);
-
+      
                   const currentFilePath = this.filePath || "";
                   $("#node-input-filePath").val(currentFilePath);
                   toggleFilePath();
-
+      
                   $("#knx-logger-downloadButton").on("click.knxUtilityProfile", function (evt) {
                       evt.preventDefault();
                       const filePathVal = $("#node-input-filePath").val() || "";
@@ -1178,12 +1178,12 @@
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
+      
                   this.filePath = $("#node-input-filePath").val() || "";
-
-
+      
+      
               }
-
+      
           })
     },
     "staircase": function (RED) {
@@ -1200,7 +1200,7 @@
         return value !== null && value !== undefined && String(value).trim() !== '' &&
           Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
       };
-
+      
       RED.nodes.registerType('knxUltimateStaircase', {
           category: 'KNX Ultimate',
           color: '#C7E9C0',
@@ -1255,21 +1255,21 @@
             const $knxServerInput = $('#node-input-server');
             try { RED.sidebar.show('help'); } catch (error) { /* ignore */ }
             const KNX_EMPTY_VALUES = new Set(['', '_ADD_', '__NONE__', 'none']);
-
+      
             const resolveKnxServerValue = () => {
               const domValue = $knxServerInput.val();
               if (domValue !== undefined && domValue !== null) return KNX_EMPTY_VALUES.has(String(domValue)) ? '' : domValue;
               if (node.server !== undefined && node.server !== null && node.server !== '') return node.server;
               return '';
             };
-
+      
             const hasKnxServerSelected = () => {
               const val = resolveKnxServerValue();
               return !(val === undefined || val === null || KNX_EMPTY_VALUES.has(String(val)));
             };
-
+      
             const KNX_GA_CACHE = node._knxGaCache || (node._knxGaCache = new Map());
-
+      
             const fetchGroupAddresses = (serverId) => {
               if (!serverId) return Promise.resolve([]);
               if (KNX_GA_CACHE.has(serverId)) return Promise.resolve(KNX_GA_CACHE.get(serverId));
@@ -1281,13 +1281,13 @@
                 }).fail(() => resolve([]));
               });
             };
-
+      
             const getGroupAddress = (gaSelector, nameSelector, dptSelector, prefixes) => {
               const $gaInput = $(gaSelector);
               const $nameInput = $(nameSelector);
               const $dptInput = $(dptSelector);
               if (!$gaInput.length) return;
-
+      
               const ensureAutocomplete = () => {
                 const sourceFn = (request, response) => {
                   if (!hasKnxServerSelected()) {
@@ -1314,7 +1314,7 @@
                     response(items);
                   });
                 };
-
+      
                 if ($gaInput.data('knx-ga-initialised')) {
                   $gaInput.autocomplete('option', 'source', sourceFn);
                 } else {
@@ -1357,35 +1357,35 @@
                   }
                 } catch (error) { /* ignore */ }
               };
-
+      
               ensureAutocomplete();
             };
-
+      
             const BINARY_PREFIX = ['1.'];
             const ANY_ANALOG_PREFIX = ['1.', '2.', '5.', '6.', '7.', '8.', '9.', '12.', '13.', '14.', '16.', '20.'];
-
+      
             const refreshKnxBindings = () => {
               if (!hasKnxServerSelected()) {
                 return;
               }
-
+      
               getGroupAddress('#node-input-gaTrigger', '#node-input-nameTrigger', '#node-input-dptTrigger', BINARY_PREFIX);
               getGroupAddress('#node-input-gaOutput', '#node-input-nameOutput', '#node-input-dptOutput', ANY_ANALOG_PREFIX);
               getGroupAddress('#node-input-gaStatus', '#node-input-nameStatus', '#node-input-dptStatus', ANY_ANALOG_PREFIX);
               getGroupAddress('#node-input-gaOverride', '#node-input-nameOverride', '#node-input-dptOverride', BINARY_PREFIX);
               getGroupAddress('#node-input-gaBlock', '#node-input-nameBlock', '#node-input-dptBlock', BINARY_PREFIX);
             };
-
+      
             $knxServerInput.off('.knxUtilityProfile').on('change.knxUtilityProfile', () => {
               KNX_GA_CACHE.clear();
               refreshKnxBindings();
             });
-
+      
             refreshKnxBindings();
-
+      
             const $preWarnRows = $('.knx-staircase-prewarn');
             const $flashRow = $('.knx-staircase-prewarn-flash');
-
+      
             function syncPreWarnMode() {
               const enabled = $('#node-input-preWarnEnable').is(':checked');
               $preWarnRows.toggle(enabled);
@@ -1396,7 +1396,7 @@
               const mode = $('#node-input-preWarnMode').val();
               $flashRow.toggle(mode === 'flash');
             }
-
+      
             $('#node-input-preWarnEnable').on('change.knxUtilityProfile', syncPreWarnMode);
             $('#node-input-preWarnMode').on('change.knxUtilityProfile', syncPreWarnMode);
             syncPreWarnMode();
@@ -1422,7 +1422,7 @@
         return value !== null && value !== undefined && String(value).trim() !== '' &&
           Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
       };
-
+      
       RED.nodes.registerType('knxUltimateGarage', {
           category: 'KNX Ultimate',
           color: '#C7E9C0',
@@ -1477,21 +1477,21 @@
             const $knxServerInput = $('#node-input-server');
             try { RED.sidebar.show('help'); } catch (error) { /* ignore */ }
             const KNX_EMPTY_VALUES = new Set(['', '_ADD_', '__NONE__', 'none']);
-
+      
             const resolveKnxServerValue = () => {
               const domValue = $knxServerInput.val();
               if (domValue !== undefined && domValue !== null) return KNX_EMPTY_VALUES.has(String(domValue)) ? '' : domValue;
               if (node.server !== undefined && node.server !== null && node.server !== '') return node.server;
               return '';
             };
-
+      
             const hasKnxServerSelected = () => {
               const val = resolveKnxServerValue();
               return !(val === undefined || val === null || KNX_EMPTY_VALUES.has(String(val)));
             };
-
+      
             const KNX_GA_CACHE = node._knxGaCache || (node._knxGaCache = new Map());
-
+      
             const fetchGroupAddresses = (serverId) => {
               if (!serverId) return Promise.resolve([]);
               if (KNX_GA_CACHE.has(serverId)) return Promise.resolve(KNX_GA_CACHE.get(serverId));
@@ -1503,13 +1503,13 @@
                 }).fail(() => resolve([]));
               });
             };
-
+      
             const getGroupAddress = (gaSelector, nameSelector, dptSelector, prefixes) => {
               const $gaInput = $(gaSelector);
               const $nameInput = $(nameSelector);
               const $dptInput = $(dptSelector);
               if (!$gaInput.length) return;
-
+      
               const ensureAutocomplete = () => {
                 const sourceFn = (request, response) => {
                   if (!hasKnxServerSelected()) {
@@ -1536,7 +1536,7 @@
                     response(items);
                   });
                 };
-
+      
                 if ($gaInput.data('knx-ga-initialised')) {
                   $gaInput.autocomplete('option', 'source', sourceFn);
                 } else {
@@ -1579,15 +1579,15 @@
                   }
                 } catch (error) { /* ignore */ }
               };
-
+      
               ensureAutocomplete();
             };
-
+      
             const BINARY_PREFIX = ['1.'];
-
+      
             const refreshKnxBindings = () => {
               if (!hasKnxServerSelected()) return;
-
+      
               getGroupAddress('#node-input-gaCommand', '#node-input-nameCommand', '#node-input-dptCommand', BINARY_PREFIX);
               getGroupAddress('#node-input-gaImpulse', '#node-input-nameImpulse', '#node-input-dptImpulse', BINARY_PREFIX);
               getGroupAddress('#node-input-gaHoldOpen', '#node-input-nameHoldOpen', '#node-input-dptHoldOpen', BINARY_PREFIX);
@@ -1596,19 +1596,19 @@
               getGroupAddress('#node-input-gaMoving', '#node-input-nameMoving', '#node-input-dptMoving', BINARY_PREFIX);
               getGroupAddress('#node-input-gaObstruction', '#node-input-nameObstruction', '#node-input-dptObstruction', BINARY_PREFIX);
             };
-
+      
             $knxServerInput.off('.knxUtilityProfile').on('change.knxUtilityProfile', () => {
               KNX_GA_CACHE.clear();
               refreshKnxBindings();
             });
             if (hasKnxServerSelected()) refreshKnxBindings();
-
+      
             const syncAutoClose = () => {
               const enabled = $('#node-input-autoCloseEnable').is(':checked');
               const $seconds = $('#node-input-autoCloseSeconds').closest('.form-row');
               $seconds.toggle(enabled);
             };
-
+      
             $('#node-input-autoCloseEnable').on('change.knxUtilityProfile', syncAutoClose);
             syncAutoClose();
           },
@@ -1633,7 +1633,7 @@
                   topicSave: { value: "" },
                   dptSave: { value: "" },
                   topicSaveTrigger: { value: "true" },
-
+      
                   rules: { value: [] }
               },
               inputs: 1,
@@ -1654,7 +1654,7 @@
                           if (editorSession.active && $('#node-input-server').val() === serverId) callback(data);
                       });
                   };
-
+      
                   const dptFields = [];
                   const dptRequests = new Map();
                   const loadDptOptions = (field, savedValue, track = true) => {
@@ -1687,10 +1687,10 @@
                   try {
                       RED.sidebar.show("help");
                   } catch (error) { }
-
+      
                   var node = this;
                   var oNodeServer = RED.nodes.node($("#node-input-server").val()); // Store the config-node
-
+      
                   // 19/02/2020 Used to get the server sooner als deploy.
                   $("#node-input-server").off(".knxUtilityProfile").on("change.knxUtilityProfile", function () {
                       try {
@@ -1698,13 +1698,13 @@
                           dptFields.forEach((field) => loadDptOptions(field, field.val(), false));
                       } catch (error) { }
                   });
-
-
-
+      
+      
+      
                   // DPT of Scene Recall
                   // ########################
                   loadDptOptions($("#node-input-dpt"), this.dpt);
-
+      
                   // Autocomplete suggestion with ETS csv File
                   $("#node-input-topic").autocomplete({
                       minLength: 0,
@@ -1745,7 +1745,7 @@
                   });
                   try { if (oNodeServer && oNodeServer.id) KNX_enableSecureFormatting($("#node-input-topicSave"), oNodeServer.id); } catch (e) {}
                   try { if (oNodeServer && oNodeServer.id) KNX_enableSecureFormatting($("#node-input-topic"), oNodeServer.id); } catch (e) {}
-
+      
                   // 19/03/2020 Adjust trigger value accordingly
                   $("#node-input-dpt").on("change.knxUtilityProfile", function () {
                       if ($(this).val() !== null) {
@@ -1781,7 +1781,7 @@
                                               }
                                           }]
                                   })
-
+      
                           } else if ($(this).val().indexOf("232.600") > -1) {
                               // It's a scene actuator. Suggest the right value
                               $("#node-input-topicTrigger").val("{red:0, green:0, blue:0}");
@@ -1798,7 +1798,7 @@
                                               }
                                           }]
                                   })
-
+      
                           } else if ($(this).val().indexOf("251.600") > -1) {
                               // It's a scene actuator. Suggest the right value
                               $("#node-input-topicTrigger").val("{red:0, green:0, blue:0, white:0, mR:1, mG:1, mB:1, mW:1}");
@@ -1815,19 +1815,19 @@
                                               }
                                           }]
                                   })
-
+      
                           }
-
+      
                       }
                   });
                   // ########################
-
-
-
+      
+      
+      
                   // DPT of Scene Save
                   // ########################
                   loadDptOptions($("#node-input-dptSave"), this.dptSave);
-
+      
                   // Autocomplete suggestion with ETS csv File
                   $("#node-input-topicSave").autocomplete({
                       minLength: 0,
@@ -1865,7 +1865,7 @@
                   }).focus(function () {
                       $(this).autocomplete('search', $(this).val() + 'exactmatch');
                   });
-
+      
                   // 02/04/2020 Adjust trigger value accordingly
                   $("#node-input-dptSave").on("change.knxUtilityProfile", function () {
                       if ($(this).val() !== null) {
@@ -1901,7 +1901,7 @@
                                               }
                                           }]
                                   })
-
+      
                           } else if ($(this).val().indexOf("232.600") > -1) {
                               // It's a scene actuator. Suggest the right value
                               $("#node-input-topicSaveTrigger").val("{red:0, green:0, blue:0}");
@@ -1918,20 +1918,20 @@
                                               }
                                           }]
                                   })
-
+      
                           }
-
+      
                       }
                   });
                   // ########################
-
-
+      
+      
                   // Scene configuration
                   function resizeRule(rule) { }
                   $("#node-input-rule-container").css('min-height', '150px').css('min-width', '450px').editableList({
                       addItem: function (container, i, opt) { // row, index, data
                           // opt.r is: { topic: rowRuleTopic, devicename: rowRuleDeviceName, dpt:rowRuleDPT, send: rowRuleSend}
-
+      
                           if (!opt.hasOwnProperty('r')) {
                               opt.r = {};
                           }
@@ -1943,24 +1943,24 @@
                               overflow: 'hidden',
                               whiteSpace: 'nowrap'
                           });
-
-
+      
+      
                           var row = $('<div class="form-row"/>').appendTo(container);
                           var row2 = $('<div class="form-row"/>', { style: "padding-top: 5px; padding-left: 5px;" }).appendTo(container);
-
+      
                           var oTopicField = $("<input/>", { class: "rowRuleTopic", type: "text", placeholder: "1/1/1, wait or device name", style: "width:140px; margin-left: 5px; text-align: left;" }).appendTo(row);
                           var oDPTField = $('<select/>', { class: "rowRuleDPT", type: "text", style: "width:160px; margin-left: 5px; text-align: left;" }).appendTo(row);
                           var finalspan = $('<span/>', { style: "" }).appendTo(row);
                           finalspan.append(' &#8594; <span class="node-input-rule-index"></span> ');
                           var oSendField = $('<input/>', { class: "rowRuleSend", type: "text", placeholder: "Value", style: "width:150px; margin-left: 5px; text-align: left;" }).appendTo(row);
                           var orowRuleDeviceName = $('<input/>', { class: "rowRuleDeviceName", type: "text", style: "width:95%; margin-left: 0px; text-align: left;font-style: italic;", placeholder: "Device Name" }).appendTo(row2);
-
+      
                           oTopicField.on("change.knxUtilityProfile", function () {
                               resizeRule(container);
                           });
-
+      
                           loadDptOptions(oDPTField, rule.dpt);
-
+      
                           // Autocomplete suggestion with ETS csv File
                           oTopicField.autocomplete({
                               minLength: 0,
@@ -2002,7 +2002,7 @@
                               } catch (error) { /* empty */ }
                           });
                           try { if (oNodeServer && oNodeServer.id) KNX_enableSecureFormatting(oTopicField, oNodeServer.id); } catch (e) {}
-
+      
                           oTopicField.val(rule.topic);
                           oSendField.val(rule.send);
                           orowRuleDeviceName.val(rule.devicename);
@@ -2016,15 +2016,15 @@
                       sortable: true,
                       removable: true
                   });
-
-
+      
+      
                   // 10/03/2020 For each rule, create a row
                   for (var i = 0; i < (this.rules || []).length; i++) {
                       var rule = this.rules[i];
                       $("#node-input-rule-container").editableList('addItem', { r: rule, i: i });
                   }
-
-
+      
+      
               },
               oneditcancel: function () {
                   if (this._knxUtilityProfileSession) this._knxUtilityProfileSession.active = false;
@@ -2036,9 +2036,9 @@
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
+      
                   var node = this;
-
+      
                   var rules = $("#node-input-rule-container").editableList('items');
                   node.rules = [];
                   rules.each(function (i) {
@@ -2073,7 +2073,7 @@
         return value !== null && value !== undefined && String(value).trim() !== '' &&
           Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
       };
-
+      
       RED.nodes.registerType('knxUltimateLoadControl', {
               category: "KNX Ultimate",
               color: '#C7E9C0',
@@ -2140,7 +2140,7 @@
                           if (editorSession.active && $('#node-input-server').val() === serverId) callback(data);
                       });
                   };
-
+      
                   const dptFields = [];
                   const dptRequests = new Map();
                   const loadDptOptions = (field, savedValue, track = true) => {
@@ -2173,10 +2173,10 @@
                   try {
                       RED.sidebar.show("help");
                   } catch (error) { }
-
+      
                   var node = this;
                   var oNodeServer = RED.nodes.node($("#node-input-server").val()); // Store the config-node
-
+      
                   // 19/02/2020 Used to get the server sooner als deploy.
                   $("#node-input-server").off(".knxUtilityProfile").on("change.knxUtilityProfile", function () {
                       try {
@@ -2184,15 +2184,15 @@
                           dptFields.forEach((field) => loadDptOptions(field, field.val(), false));
                       } catch (error) { }
                   });
-
-
-
+      
+      
+      
                   loadDptOptions($('#node-input-dpt'), this.dpt);
                   for (let index = 1; index < 6; index++) {
                       loadDptOptions($('#node-input-DPT' + index), this['DPT' + index]);
                       loadDptOptions($('#node-input-MonitorDPT' + index), this['MonitorDPT' + index]);
                   }
-
+      
                   const toggleAutoFields = () => {
                       const mode = ($("#node-input-controlMode").val() || "auto").toString();
                       if (mode === "msg") {
@@ -2201,9 +2201,9 @@
                           $(".knx-lc-auto-only").show();
                       }
                   };
-
+      
                   $("#node-input-controlMode").on("change.knxUtilityProfile", toggleAutoFields);
-
+      
                   // Autocomplete suggestion with ETS csv File
                   this.autoComplete = (_Name, _DPT) => {
                       let paramAutoComplete = {
@@ -2235,7 +2235,7 @@
                               } else {
                                   $("#node-input-" + _Name).val(sDevName);
                               }
-
+      
                               var optVal = $("#node-input-dpt option:contains('" + ui.item.label.split("#")[2].trim() + "')").attr('value');
                               var $dptSelect = $("#node-input-" + _DPT);
                               if (optVal !== undefined && optVal !== null) {
@@ -2247,7 +2247,7 @@
                       };
                       return paramAutoComplete;
                   };
-
+      
                   $("#node-input-topic").autocomplete(this.autoComplete("name", "dpt")).on('focus.knxUltimateLoadControl click.knxUltimateLoadControl', function () {
                       try {
                           $(this).autocomplete('search', '');
@@ -2268,10 +2268,10 @@
                       try { var srv2 = RED.nodes.node($("#node-input-server").val()); if (srv2 && srv2.id) KNX_enableSecureFormatting($("#node-input-GA" + index), srv2.id); } catch (e) {}
                       try { var srv3 = RED.nodes.node($("#node-input-server").val()); if (srv3 && srv3.id) KNX_enableSecureFormatting($("#node-input-MonitorGA" + index), srv3.id); } catch (e) {}
                   }
-
+      
                   toggleAutoFields();
-
-
+      
+      
               },
               oneditcancel: function () {
                   if (this._knxUtilityProfileSession) this._knxUtilityProfileSession.active = false;
@@ -2283,17 +2283,17 @@
                   try {
                       RED.sidebar.show("info");
                   } catch (error) { }
-
-
+      
+      
               },
               oneditresize: function (size) {
-
+      
               }
           })
     },
     "hatranslator": function (RED) {
       const defaultTranslations = 'on:true\noff:false\nactive:true\ninactive:false\nopen:true\nclosed:false\nclose:false\n1:true\n0:false\ntrue:true\nfalse:false\nhome:true\nnot_home:false';
-
+      
       RED.nodes.registerType('knxUltimateHATranslator', {
           category: 'KNX Ultimate',
           defaults: {
@@ -2336,17 +2336,17 @@
   // Form fragments are mounted inside #knx-utility-profile-editor. The gateway
   // and name fields remain owned by the outer Utility template.
   const PROFILE_TEMPLATES = {
-    "alerter": "<div class=\"form-row\">\n    <label for=\"node-input-whentostart\"><i class=\"fa fa-repeat\"></i> <span data-i18n=\"knxUltimateAlerter.properties.node-input-whentostart\"></span> </label>\n    <select id=\"node-input-whentostart\">\n        <option value=\"manualstart\" data-i18n=\"knxUltimateAlerter.selectlists.manualstart\"></option>\n        <option value=\"ifnewalert\" data-i18n=\"knxUltimateAlerter.selectlists.ifnewalert\"></option>\n    </select>\n</div>\n\n<div class=\"form-row\">\n    <label for=\"node-input-timerinterval\" style=\"width:70%\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateAlerter.properties.node-input-timerinterval\"></span> </label>\n    <input type=\"text\" id=\"node-input-timerinterval\" style=\"width:10%\">       \n</div>\n\n<br/>\n<br/>\n<dt><i class=\"fa fa-code-fork\"></i>&nbsp; <span data-i18n=\"knxUltimateAlerter.other.sceneConfig\"></span></dt>\n    <br/>\n    <div class=\"form-row\" id=\"divNode-input-initialreadGAInRules\">\n        &nbsp;&nbsp;<label style=\"width:60%\" for=\"node-input-initialreadGAInRules\">\n            <i class=\"fa fa-question-circle-o\"></i>\n            <span data-i18n=\"knxUltimateAlerter.properties.node-input-initialreadGAInRules\"></span>\n        </label>\n        <select style=\"width:30%\" id=\"node-input-initialreadGAInRules\">\n            <option value=\"0\" data-i18n=\"knxUltimateAlerter.properties.node-input-initialread0\"></option>\n            <option value=\"1\" data-i18n=\"knxUltimateAlerter.properties.node-input-initialread1\"></option>\n        </select>\n    \n    </div>\n<div class=\"form-row node-input-rule-container-row\">\n    <ol id=\"node-input-rule-container\"></ol>\n</div>\n\n<div class=\"form-row\">\n    <p><span data-i18n=\"knxUltimateAlerter.other.add\"></span></p>\n</div>",
-    "autoresponder": "<div class=\"form-row\">\n    <label  for=\"node-input-commandText\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateAutoResponder.respondTo\"></span></label>\n    <input  type=\"text\" id=\"node-input-commandText\">\n</div>",
-    "datetime": "<hr>\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateDateTime.section_addresses\"></span>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaDateTime\" style=\"width:155px\"><i class=\"fa fa-calendar\"></i> <span data-i18n=\"knxUltimateDateTime.gaDateTime\"></span></label>\n    <input type=\"text\" id=\"node-input-gaDateTime\" style=\"width:110px\" placeholder=\"1/7/1\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameDateTime\" style=\"flex:1; min-width:70px\" placeholder=\"DateTime object\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.nameDateTime\">\n    <label for=\"node-input-dptDateTime\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptDateTime\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaDate\" style=\"width:155px\"><i class=\"fa fa-calendar-o\"></i> <span data-i18n=\"knxUltimateDateTime.gaDate\"></span></label>\n    <input type=\"text\" id=\"node-input-gaDate\" style=\"width:110px\" placeholder=\"1/7/2\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameDate\" style=\"flex:1; min-width:70px\" placeholder=\"Date object\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.nameDate\">\n    <label for=\"node-input-dptDate\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptDate\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaTime\" style=\"width:155px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateDateTime.gaTime\"></span></label>\n    <input type=\"text\" id=\"node-input-gaTime\" style=\"width:110px\" placeholder=\"1/7/3\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameTime\" style=\"flex:1; min-width:70px\" placeholder=\"Time object\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.nameTime\">\n    <label for=\"node-input-dptTime\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptTime\" style=\"width:75px\" readonly>\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateDateTime.section_send\"></span>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-sendOnDeploy\" style=\"width:180px\"><i class=\"fa fa-play\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-sendOnDeploy\"></span></label>\n    <input type=\"checkbox\" id=\"node-input-sendOnDeploy\" style=\"width:auto\">\n  </div>\n\n  <div class=\"form-row knx-datetime-deploy-options\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-sendOnDeployDelay\" style=\"width:180px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-sendOnDeployDelay\"></span></label>\n    <input type=\"number\" id=\"node-input-sendOnDeployDelay\" style=\"width:120px\">\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-periodicSend\" style=\"width:180px\"><i class=\"fa fa-repeat\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-periodicSend\"></span></label>\n    <input type=\"checkbox\" id=\"node-input-periodicSend\" style=\"width:auto\">\n  </div>\n\n  <div class=\"form-row knx-datetime-periodic-options\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-periodicSendInterval\" style=\"width:180px\"><i class=\"fa fa-hourglass\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-periodicSendInterval\"></span></label>\n    <input type=\"number\" id=\"node-input-periodicSendInterval\" style=\"width:120px\">\n    <select id=\"node-input-periodicSendUnit\" style=\"width:160px\">\n      <option value=\"s\" data-i18n=\"knxUltimateDateTime.unit_seconds\"></option>\n      <option value=\"m\" data-i18n=\"knxUltimateDateTime.unit_minutes\"></option>\n    </select>\n  </div>",
-    "watchdog": "<div class=\"form-row\">\n        <label for=\"node-input-checkLevel\"><i class=\"fa fa-search\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-checkLevel\"></span> </label>\n        <select id=\"node-input-checkLevel\">\n            <option value=\"Ethernet\" data-i18n=\"knxUltimateWatchDog.selectlists.Ethernet\"></option>\n            <option value=\"Eth+KNX\" data-i18n=\"knxUltimateWatchDog.selectlists.EthKNX\"></option>\n        </select>\n    </div>\n    <div class=\"form-row\" id=\"divHost\">\n        <label for=\"node-input-topic\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-topic\"></span></label>\n        <input style=\"width:90px;\" type=\"text\" id=\"node-input-topic\" data-i18n=\"[placeholder]knxUltimateWatchDog.placeholder.monitor\"> <span data-i18n=\"knxUltimateWatchDog.booleanHint\"></span>\n    </div>  \n    \n    <div class=\"form-row\">\n        <input type=\"checkbox\" id=\"node-input-autoStart\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n        <label style=\"width:auto\" for=\"node-input-autoStart\">&nbsp;&nbsp;<i class=\"fa fa-play-circle\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-autoStart\"></span> </label>\n    </div>\n    <div class=\"form-row\">\n        <input type=\"checkbox\" id=\"node-input-listenToKnxUltimateNodeErrors\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n        <label style=\"width:auto\" for=\"node-input-listenToKnxUltimateNodeErrors\">&nbsp;&nbsp;<i class=\"fa fa-exclamation-triangle\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-listenToKnxUltimateNodeErrors\"></span> </label>\n    </div>\n    \n    <div id=\"advancedOptionsAccordion\">\n        <h3><span data-i18n=\"knxUltimateWatchDog.properties.advancedOptionsAccordion\"></span></h3>\n        <div>\n            <p>\n                <div class=\"form-row\">\n                    <label for=\"node-input-retryInterval\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-retryInterval\"></span></label>\n                    <input type=\"text\" id=\"node-input-retryInterval\">\n                </div>\n                <div class=\"form-row\">\n                    <label for=\"node-input-maxRetry\"><i class=\"fa fa-undo\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-maxRetry\"></span></label>\n                    <input type=\"text\" id=\"node-input-maxRetry\">\n                </div>\n            </p>\n        </div>\n    </div>",
-    "globalcontext": "<div class=\"form-tips\" style=\"margin-bottom:16px\" data-i18n=\"knxUltimateGlobalContext.advanced.warning\"></div>\n\n<div class=\"form-row\">\n    <label for=\"node-input-exposeAsVariable\" style=\"width:60%;\">\n        <i class=\"fa fa-link\"></i>\n        <span data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariable\"></span>\n    </label>\n    <select id=\"node-input-exposeAsVariable\" style=\"width:35%;\">\n        <option value=\"exposeAsVariableNO\" data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariableNO\"></option>\n        <option value=\"exposeAsVariableREADONLY\" data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariableREADONLY\"></option>\n        <option value=\"exposeAsVariableREADWRITE\" data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariableREADWRITE\"></option>\n    </select>\n</div>\n\n<div class=\"form-row\">\n    <label for=\"node-input-writeExecutionInterval\" style=\"width:60%;\">\n        <i class=\"fa fa-link\"></i>\n        <span data-i18n=\"knxUltimateGlobalContext.advanced.writeExecutionInterval\"></span>\n    </label>\n    <select id=\"node-input-writeExecutionInterval\" style=\"width:35%;\">\n        <option value=250 data-i18n=\"knxUltimateGlobalContext.interval_250ms\"></option>\n        <option value=500 data-i18n=\"knxUltimateGlobalContext.interval_500ms\"></option>\n        <option value=1000 data-i18n=\"knxUltimateGlobalContext.interval_1000ms_default\"></option>\n        <option value=1500 data-i18n=\"knxUltimateGlobalContext.interval_1500ms\"></option>\n        <option value=2000 data-i18n=\"knxUltimateGlobalContext.interval_2000ms\"></option>\n    </select>\n</div>\n\n<div class=\"form-row\">\n    <label for=\"node-input-contextStorage\" style=\"width:60%;\">\n        <i class=\"fa fa-tag\"></i> <span data-i18n=\"knxUltimateGlobalContext.contextStorage\"></span>\n    </label>\n    <input style=\"width:35%;\" type=\"text\" id=\"node-input-contextStorage\" data-i18n=\"[placeholder]knxUltimateGlobalContext.contextStoragePlaceholder\" />\n</div>",
-    "logger": "<div class=\"form-row\">\n        <label for=\"node-input-topic\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-topic\"></span></label>\n        <input type=\"text\" id=\"node-input-topic\" data-i18n=\"[placeholder]knxUltimateLogger.properties.node-input-topic\">\n    </div>\n    \n      \n    \n    <div id=\"mlxETSFileAccordion\">\n        <h3><span data-i18n=\"knxUltimateLogger.properties.mlxETSFileAccordion\"></span></h3>\n        <div>\n            <p>\n                 <div class=\"form-row\">\n                    <input type=\"checkbox\" id=\"node-input-autoStartTimerCreateETSXML\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n                    <label style=\"width:auto\" for=\"node-input-autoStartTimerCreateETSXML\">&nbsp;&nbsp;<i class=\"fa fa-play-circle\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-autoStartTimerCreateETSXML\"></span> </label>\n                </div> \n                 <div class=\"form-row\">\n                    <label style=\"width:290px\" for=\"node-input-saveMode\"><i class=\"fa fa-save\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-saveMode\"></span></label>\n                    <select style=\"width:100%\" id=\"node-input-saveMode\">\n                        <option value=\"emit\" data-i18n=\"knxUltimateLogger.selectlists.saveMode.emit\"></option>\n                        <option value=\"emit_save\" data-i18n=\"knxUltimateLogger.selectlists.saveMode.emit_save\"></option>\n                    </select>\n                </div>\n                <div class=\"form-row\" id=\"knx-logger-filePath-row\">\n                    <label style=\"width:290px\" for=\"node-input-filePath\"><i class=\"fa fa-file-text-o\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-filePath\"></span></label>\n                    <input style=\"width:calc(100% - 80px)\" type=\"text\" id=\"node-input-filePath\" data-i18n=\"[placeholder]knxUltimateLogger.placeholder.node-input-filePath\">\n                    <button type=\"button\" class=\"red-ui-button\" id=\"knx-logger-downloadButton\" style=\"margin-left:6px;\" title=\"Download\">\n                        <i class=\"fa fa-download\"></i>\n                    </button>\n                </div>                \n                <div class=\"form-row\">\n                    <label style=\"width:290px\" for=\"node-input-intervalCreateETSXML\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-intervalCreateETSXML\"></span></label>\n                    <input style=\"width:90px\" type=\"number\" id=\"node-input-intervalCreateETSXML\">\n                </div>\n                <div class=\"form-row\">\n                    <label style=\"width:290px\" for=\"node-input-maxRowsInETSXML\"><i class=\"fa fa-bars\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-maxRowsInETSXML\"></span></label>\n                    <input style=\"width:90px\" type=\"number\" id=\"node-input-maxRowsInETSXML\">\n                </div>               \n            </p>\n        </div>\n\n        <h3><span data-i18n=\"knxUltimateLogger.properties.telegramCounter\"></span></h3>\n        <div>\n            <p>\n                <div class=\"form-row\">\n                    <input type=\"checkbox\" id=\"node-input-autoStartTimerTelegramCounter\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n                    <label style=\"width:auto\" for=\"node-input-autoStartTimerTelegramCounter\">&nbsp;&nbsp;<i class=\"fa fa-play-circle\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-autoStartTimerCreateETSXML\"></span> </label>\n                </div>  \n                <div class=\"form-row\">\n                    <label style=\"width:290px\" for=\"node-input-intervalTelegramCount\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-intervalTelegramCount\"></span></label>\n                    <input style=\"width:90px\" type=\"number\" id=\"node-input-intervalTelegramCount\">\n                </div>                \n            </p>\n        </div>\n    </div>",
-    "staircase": "<div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-outputtopic\" style=\"width:180px\"><i class=\"fa fa-comment\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-outputtopic\"></span></label>\n    <input type=\"text\" id=\"node-input-outputtopic\" style=\"flex:1\" placeholder=\"events/staircase\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.outputtopic\">\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateStaircase.section_commands\"></span>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaOutput\" style=\"width:155px\"><i class=\"fa fa-lightbulb-o\"></i> <span data-i18n=\"knxUltimateStaircase.output\"></span></label>\n    <input type=\"text\" id=\"node-input-gaOutput\" style=\"width:110px\" placeholder=\"1/1/2\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameOutput\" style=\"flex:1; min-width:70px\" placeholder=\"Staircase actuator\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.outputName\">\n    <label for=\"node-input-dptOutput\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptOutput\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaStatus\" style=\"width:155px\"><i class=\"fa fa-info-circle\"></i> <span data-i18n=\"knxUltimateStaircase.status\"></span></label>\n    <input type=\"text\" id=\"node-input-gaStatus\" style=\"width:110px\" placeholder=\"1/1/3\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameStatus\" style=\"flex:1; min-width:70px\" placeholder=\"Status LED\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.statusName\">\n    <label for=\"node-input-dptStatus\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptStatus\" style=\"width:75px\" readonly>\n  </div>\n\n  <div style=\"border-top:1px solid #ccc; margin:10px 0 6px;\"></div>\n\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateStaircase.section_inputs\"></span>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaTrigger\" style=\"width:155px\"><i class=\"fa fa-bolt\"></i> <span data-i18n=\"knxUltimateStaircase.trigger\"></span></label>\n    <input type=\"text\" id=\"node-input-gaTrigger\" style=\"width:110px\" placeholder=\"1/1/1\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameTrigger\" style=\"flex:1; min-width:70px\" placeholder=\"Living room switch\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.triggerName\">\n    <label for=\"node-input-dptTrigger\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptTrigger\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaOverride\" style=\"width:155px\"><i class=\"fa fa-toggle-on\"></i> <span data-i18n=\"knxUltimateStaircase.override\"></span></label>\n    <input type=\"text\" id=\"node-input-gaOverride\" style=\"width:110px\" placeholder=\"1/1/4\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameOverride\" style=\"flex:1; min-width:70px\" placeholder=\"Maintenance override\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.overrideName\">\n    <label for=\"node-input-dptOverride\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptOverride\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaBlock\" style=\"width:155px\"><i class=\"fa fa-hand-paper-o\"></i> <span data-i18n=\"knxUltimateStaircase.block\"></span></label>\n    <input type=\"text\" id=\"node-input-gaBlock\" style=\"width:110px\" placeholder=\"1/1/5\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameBlock\" style=\"flex:1; min-width:70px\" placeholder=\"Block command\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.blockName\">\n    <label for=\"node-input-dptBlock\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptBlock\" style=\"width:75px\" readonly>\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-timerSeconds\" style=\"width:180px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-timerSeconds\"></span></label>\n    <input type=\"number\" id=\"node-input-timerSeconds\" style=\"width:140px\" min=\"1\">\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-extendMode\" style=\"width:180px\"><i class=\"fa fa-repeat\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-extendMode\"></span></label>\n    <select id=\"node-input-extendMode\" style=\"flex:1\">\n      <option value=\"restart\" data-i18n=\"knxUltimateStaircase.extend_restart\"></option>\n      <option value=\"extend\" data-i18n=\"knxUltimateStaircase.extend_extend\"></option>\n      <option value=\"ignore\" data-i18n=\"knxUltimateStaircase.extend_ignore\"></option>\n    </select>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-triggerOffCancels\" style=\"width:180px\"><i class=\"fa fa-power-off\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-triggerOffCancels\"></span></label>\n    <select id=\"node-input-triggerOffCancels\" style=\"flex:1\">\n      <option value=\"yes\" data-i18n=\"knxUltimateStaircase.opt_yes\"></option>\n      <option value=\"no\" data-i18n=\"knxUltimateStaircase.opt_no\"></option>\n    </select>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-blockAction\" style=\"width:180px\"><i class=\"fa fa-ban\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-blockAction\"></span></label>\n    <select id=\"node-input-blockAction\" style=\"flex:1\">\n      <option value=\"off\" data-i18n=\"knxUltimateStaircase.block_off\"></option>\n      <option value=\"keep\" data-i18n=\"knxUltimateStaircase.block_keep\"></option>\n    </select>\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-preWarnEnable\" style=\"width:180px\"><i class=\"fa fa-exclamation-triangle\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnEnable\"></span></label>\n    <input type=\"checkbox\" id=\"node-input-preWarnEnable\" style=\"width:auto\">\n  </div>\n\n  <div class=\"form-row knx-staircase-prewarn\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-preWarnSeconds\" style=\"width:180px\"><i class=\"fa fa-hourglass-end\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnSeconds\"></span></label>\n    <input type=\"number\" id=\"node-input-preWarnSeconds\" style=\"width:140px\" min=\"1\">\n  </div>\n\n  <div class=\"form-row knx-staircase-prewarn\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-preWarnMode\" style=\"width:180px\"><i class=\"fa fa-bullhorn\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnMode\"></span></label>\n    <select id=\"node-input-preWarnMode\" style=\"flex:1\">\n      <option value=\"status\" data-i18n=\"knxUltimateStaircase.prewarn_status\"></option>\n      <option value=\"flash\" data-i18n=\"knxUltimateStaircase.prewarn_flash\"></option>\n    </select>\n  </div>\n\n  <div class=\"form-row knx-staircase-prewarn knx-staircase-prewarn-flash\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-preWarnFlashMs\" style=\"width:180px\"><i class=\"fa fa-lightbulb-o\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnFlashMs\"></span></label>\n    <input type=\"number\" id=\"node-input-preWarnFlashMs\" style=\"width:140px\" min=\"50\">\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-emitEvents\" style=\"width:180px\"><i class=\"fa fa-sign-out\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-emitEvents\"></span></label>\n    <input type=\"checkbox\" id=\"node-input-emitEvents\" style=\"width:auto\">\n  </div>\n\n  <br/><br/><br/><br/>",
-    "garage": "<div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-outputtopic\" style=\"width:180px\"><i class=\"fa fa-comment\"></i> <span data-i18n=\"knxUltimateGarage.node-input-outputtopic\"></span></label>\n    <input type=\"text\" id=\"node-input-outputtopic\" style=\"flex:1\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.outputtopic\">\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateGarage.section_commands\"></span>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaCommand\" style=\"width:155px\"><i class=\"fa fa-exchange\"></i> <span data-i18n=\"knxUltimateGarage.command\"></span></label>\n    <input type=\"text\" id=\"node-input-gaCommand\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameCommand\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.commandName\">\n    <label for=\"node-input-dptCommand\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptCommand\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaImpulse\" style=\"width:155px\"><i class=\"fa fa-bolt\"></i> <span data-i18n=\"knxUltimateGarage.impulse\"></span></label>\n    <input type=\"text\" id=\"node-input-gaImpulse\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameImpulse\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.impulseName\">\n    <label for=\"node-input-dptImpulse\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptImpulse\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaMoving\" style=\"width:155px\"><i class=\"fa fa-arrows-h\"></i> <span data-i18n=\"knxUltimateGarage.moving\"></span></label>\n    <input type=\"text\" id=\"node-input-gaMoving\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameMoving\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.movingName\">\n    <label for=\"node-input-dptMoving\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptMoving\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaObstruction\" style=\"width:155px\"><i class=\"fa fa-exclamation-triangle\"></i> <span data-i18n=\"knxUltimateGarage.obstruction\"></span></label>\n    <input type=\"text\" id=\"node-input-gaObstruction\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameObstruction\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.obstructionName\">\n    <label for=\"node-input-dptObstruction\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptObstruction\" style=\"width:75px\" readonly>\n  </div>\n\n  <div style=\"border-top:1px solid #ccc; margin:10px 0 6px;\"></div>\n\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateGarage.section_inputs\"></span>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaHoldOpen\" style=\"width:155px\"><i class=\"fa fa-pause\"></i> <span data-i18n=\"knxUltimateGarage.holdOpen\"></span></label>\n    <input type=\"text\" id=\"node-input-gaHoldOpen\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameHoldOpen\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.holdOpenName\">\n    <label for=\"node-input-dptHoldOpen\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptHoldOpen\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaDisable\" style=\"width:155px\"><i class=\"fa fa-ban\"></i> <span data-i18n=\"knxUltimateGarage.disable\"></span></label>\n    <input type=\"text\" id=\"node-input-gaDisable\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-nameDisable\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.disableName\">\n    <label for=\"node-input-dptDisable\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptDisable\" style=\"width:75px\" readonly>\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\n    <label for=\"node-input-gaPhotocell\" style=\"width:155px\"><i class=\"fa fa-lightbulb-o\"></i> <span data-i18n=\"knxUltimateGarage.photocell\"></span></label>\n    <input type=\"text\" id=\"node-input-gaPhotocell\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\n    <input type=\"text\" id=\"node-input-namePhotocell\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.photocellName\">\n    <label for=\"node-input-dptPhotocell\" style=\"width:30px; text-align:right\">DPT</label>\n    <input type=\"text\" id=\"node-input-dptPhotocell\" style=\"width:75px\" readonly>\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-autoCloseEnable\" style=\"width:180px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateGarage.autoCloseEnable\"></span></label>\n    <input type=\"checkbox\" id=\"node-input-autoCloseEnable\" style=\"width:auto\">\n  </div>\n\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-autoCloseSeconds\" style=\"width:180px\"><i class=\"fa fa-hourglass-end\"></i> <span data-i18n=\"knxUltimateGarage.autoCloseSeconds\"></span></label>\n    <input type=\"number\" id=\"node-input-autoCloseSeconds\" style=\"width:140px\" min=\"1\">\n  </div>\n\n  <hr>\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\n    <label for=\"node-input-emitEvents\" style=\"width:180px\"><i class=\"fa fa-sign-out\"></i> <span data-i18n=\"knxUltimateGarage.node-input-emitEvents\"></span></label>\n    <input type=\"checkbox\" id=\"node-input-emitEvents\" style=\"width:auto\">\n  </div>\n\n  <br/><br/><br/><br/>",
-    "scenecontroller": "<div id=\"GAandDPT\">\n    <div class=\"form-row\">\n        <label for=\"node-input-topic\" style=\"width:100px;\"><i class=\"fa fa-play\"></i> <span data-i18n=\"knxUltimateSceneController.properties.node-input-topic\"></span></label>\n        <input type=\"text\" id=\"node-input-topic\" placeholder=\"Ex: 1/1/1\" style=\"width:80px;margin-left: 5px; text-align: left;\">\n       \n        <label for=\"node-input-dpt\" style=\"width:90px; margin-left: 0px; text-align: right;\"><i class=\"fa fa-microchip\"></i>\n            <span data-i18n=\"knxUltimateSceneController.properties.node-input-dpt\"></span> </label>\n        <select id=\"node-input-dpt\" style=\"width:140px;\"></select>\n       \n        <label for=\"node-input-topicTrigger\" style=\"width:60px;text-align: right;\"><i class=\"fa fa-bolt\"></i> <span data-i18n=\"knxUltimateSceneController.properties.node-input-topicTrigger\"></span></label>\n        <input type=\"text\" id=\"node-input-topicTrigger\" placeholder=\"Ex: 5 or true\" style=\"width:100px;margin-left: 5px; text-align: left;\">\n        \n    </div>\n    <div class=\"form-row\">\n        <label for=\"node-input-topicSave\" style=\"width:100px;\"><i class=\"fa fa-floppy-o\"></i> <span data-i18n=\"knxUltimateSceneController.properties.node-input-topicSave\"></span></label>\n        <input type=\"text\" id=\"node-input-topicSave\" placeholder=\"Ex: 1/1/2\" style=\"width:80px;margin-left: 5px; text-align: left;\">\n        \n        <label for=\"node-input-dptSave\" style=\"width:90px; margin-left: 0px; text-align: right;\"><i class=\"fa fa-microchip\"></i>\n            <span data-i18n=\"knxUltimateSceneController.properties.node-input-dpt\"></span> </label>\n        <select id=\"node-input-dptSave\" style=\"width:140px;\"></select>\n\n        <label for=\"node-input-topicSaveTrigger\" style=\"width:60px;text-align: right;\"><i class=\"fa fa-bolt\"></i>  <span data-i18n=\"knxUltimateSceneController.properties.node-input-topicTrigger\"></span></label>\n        <input type=\"text\" id=\"node-input-topicSaveTrigger\" data-i18n=\"[placeholder]knxUltimateSceneController.placeholder.valueexample\" style=\"width:100px;margin-left: 5px; text-align: left;\">\n    </div>\n</div>\n\n<div class=\"form-row\" id=\"divTopic\">\n    <label for=\"node-input-outputtopic\"><i class=\"fa fa-tasks\"></i>  <span data-i18n=\"knxUltimateSceneController.properties.node-input-outputtopic\"></span> </label>\n    <input type=\"text\" id=\"node-input-outputtopic\" data-i18n=\"[placeholder]knxUltimateSceneController.placeholder.leaveempty\">\n</div>\n\n\n<dt><i class=\"fa fa-code-fork\"></i>&nbsp; <span data-i18n=\"knxUltimateSceneController.other.sceneConfig\"></span></dt>\n<div class=\"form-row node-input-rule-container-row\">\n    <ol id=\"node-input-rule-container\"></ol>\n</div>\n\n<div class=\"form-row\">\n    <p><span data-i18n=\"knxUltimateSceneController.other.add\"></span></p>\n</div>",
-    "loadcontrol": "<div class=\"form-row\">\n    <i class=\"fa fa-sliders\"></i>\n    <label style=\"width:100px\" for=\"node-input-controlMode\">\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-controlMode\"></span>\n    </label>\n    <select style=\"width:40%\" id=\"node-input-controlMode\">\n        <option value=\"auto\" data-i18n=\"knxUltimateLoadControl.selectlists.controlModeAuto\"></option>\n        <option value=\"msg\" data-i18n=\"knxUltimateLoadControl.selectlists.controlModeMsg\"></option>\n    </select>\n</div>\n\n<div class=\"form-row knx-lc-auto-only\">\n    <i class=\"fa fa-battery-full\"></i>\n    <label style=\"width:100px\" for=\"node-input-topic\">\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-topic\"></span>\n    </label>\n    <input style=\"width:15%\" type=\"text\" id=\"node-input-topic\" placeholder=\"Ex: 1/1/1\" />\n    <select style=\"width:15%\" id=\"node-input-dpt\"></select>\n</div>\n\n<div class=\"form-row knx-lc-auto-only\">\n    <i class=\"fa fa-exclamation\"></i>\n    <label style=\"width:125px\" for=\"node-input-wattLimit\">\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-wattLimit\"></span>\n    </label>\n    <input style=\"width:40%\" type=\"text\" id=\"node-input-wattLimit\" placeholder=\"Ex. 3000\">      \n</div>\n\n<div class=\"form-row knx-lc-auto-only\">\n    <i class=\"fa fa-toggle-off\"></i>\n    <label style=\"width:125px\" for=\"node-input-sheddingCheckInterval\">\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-sheddingCheckInterval\"></span>\n    </label>\n    <input style=\"width:40%\" type=\"text\" id=\"node-input-sheddingCheckInterval\" placeholder=\"\">      \n</div>\n\n<div class=\"form-row knx-lc-auto-only\">\n    <i class=\"fa fa-toggle-on\"></i>\n    <label style=\"width:125px\" for=\"node-input-sheddingRestoreDelay\">\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-sheddingRestoreDelay\"></span>\n    </label>\n    <input style=\"width:40%\" type=\"text\" id=\"node-input-sheddingRestoreDelay\" placeholder=\"\">      \n</div>\n\n\n\n<!-- LOAD CONTROL -->\n<hr>\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 1</b>&nbsp;<span data-i18n=\"knxUltimateLoadControl.primoaldistacco\"></span> <br/><br/>\n\n\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-power-off\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA1\" placeholder=\"Ex: 1/1/1\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT1\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name1\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-battery-half\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA1\" placeholder=\"Optional\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT1\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName1\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\">\n    <input type=\"checkbox\" id=\"node-input-autoRestore1\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n    &nbsp;\n    <label style=\"width:85%\" for=\"node-input-autoRestore1\">\n        <i class=\"fa fa-toggle-on\"></i>\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\n    </label>\n</div>\n\n<hr>\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 2</b><br/><br/>\n\n\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-power-off\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA2\" placeholder=\"Control GA\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT2\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name2\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-battery-half\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA2\" placeholder=\"Optional\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT2\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName2\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\">\n    <input type=\"checkbox\" id=\"node-input-autoRestore2\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n    &nbsp;\n    <label style=\"width:85%\" for=\"node-input-autoRestore2\">\n        <i class=\"fa fa-toggle-on\"></i>\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\n    </label>\n</div>\n\n<hr>\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 3</b><br/><br/>\n\n\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-power-off\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA3\" placeholder=\"Control GA\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT3\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name3\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-battery-half\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA3\" placeholder=\"Optional\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT3\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName3\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\">\n    <input type=\"checkbox\" id=\"node-input-autoRestore3\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n    &nbsp;\n    <label style=\"width:85%\" for=\"node-input-autoRestore3\">\n        <i class=\"fa fa-toggle-on\"></i>\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\n    </label>\n</div>\n\n<hr>\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 4</b><br/><br/>\n\n\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-power-off\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA4\" placeholder=\"Control GA\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT4\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name4\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-battery-half\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA4\" placeholder=\"Optional\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT4\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName4\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\">\n    <input type=\"checkbox\" id=\"node-input-autoRestore4\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n    &nbsp;\n    <label style=\"width:85%\" for=\"node-input-autoRestore4\">\n        <i class=\"fa fa-toggle-on\"></i>\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\n    </label>\n</div>\n\n<hr>\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 5</b><br/><br/>\n\n\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-power-off\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA5\" placeholder=\"Control GA\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT5\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name5\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\n    <i class=\"fa fa-battery-half\"></i>\n    \n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA5\" placeholder=\"Optional\" />\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT5\"></select>\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName5\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\n</div>\n<div class=\"form-row\">\n    <input type=\"checkbox\" id=\"node-input-autoRestore5\" style=\"display:inline-block; width:auto; vertical-align:top;\">\n    &nbsp;\n    <label style=\"width:85%\" for=\"node-input-autoRestore5\">\n        <i class=\"fa fa-toggle-on\"></i>\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\n    </label>\n</div>\n\n</br>\n</br>\n</br>\n</br>",
-    "hatranslator": "<div class=\"form-row\">\n    <label for=\"node-input-payloadPropName\"><i class=\"fa fa-ellipsis-h\"></i> <span data-i18n=\"knxUltimateHATranslator.inputProperty\"></span></label>\n    <input type=\"text\" id=\"node-input-payloadPropName\" placeholder=\"payload\">\n</div>\n<div class=\"form-tips\" style=\"margin-bottom:16px\" data-i18n=\"knxUltimateHATranslator.inputHint\"></div>\n<div class=\"form-row\">\n    <label for=\"node-input-editorcommandText\" style=\"width:100%\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateHATranslator.translations\"></span></label>\n    <div style=\"height:250px; min-height:150px; width:100%;\" class=\"node-text-editor\" id=\"node-input-editorcommandText\"></div>\n</div>\n<div class=\"form-tips\" data-i18n=\"knxUltimateHATranslator.translationHint\"></div>"
+    "alerter": "<div class=\"form-row\">\r\n    <label for=\"node-input-whentostart\"><i class=\"fa fa-repeat\"></i> <span data-i18n=\"knxUltimateAlerter.properties.node-input-whentostart\"></span> </label>\r\n    <select id=\"node-input-whentostart\">\r\n        <option value=\"manualstart\" data-i18n=\"knxUltimateAlerter.selectlists.manualstart\"></option>\r\n        <option value=\"ifnewalert\" data-i18n=\"knxUltimateAlerter.selectlists.ifnewalert\"></option>\r\n    </select>\r\n</div>\r\n\r\n<div class=\"form-row\">\r\n    <label for=\"node-input-timerinterval\" style=\"width:70%\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateAlerter.properties.node-input-timerinterval\"></span> </label>\r\n    <input type=\"text\" id=\"node-input-timerinterval\" style=\"width:10%\">       \r\n</div>\r\n\r\n<br/>\r\n<br/>\r\n<dt><i class=\"fa fa-code-fork\"></i>&nbsp; <span data-i18n=\"knxUltimateAlerter.other.sceneConfig\"></span></dt>\r\n    <br/>\r\n    <div class=\"form-row\" id=\"divNode-input-initialreadGAInRules\">\r\n        &nbsp;&nbsp;<label style=\"width:60%\" for=\"node-input-initialreadGAInRules\">\r\n            <i class=\"fa fa-question-circle-o\"></i>\r\n            <span data-i18n=\"knxUltimateAlerter.properties.node-input-initialreadGAInRules\"></span>\r\n        </label>\r\n        <select style=\"width:30%\" id=\"node-input-initialreadGAInRules\">\r\n            <option value=\"0\" data-i18n=\"knxUltimateAlerter.properties.node-input-initialread0\"></option>\r\n            <option value=\"1\" data-i18n=\"knxUltimateAlerter.properties.node-input-initialread1\"></option>\r\n        </select>\r\n    \r\n    </div>\r\n<div class=\"form-row node-input-rule-container-row\">\r\n    <ol id=\"node-input-rule-container\"></ol>\r\n</div>\r\n\r\n<div class=\"form-row\">\r\n    <p><span data-i18n=\"knxUltimateAlerter.other.add\"></span></p>\r\n</div>",
+    "autoresponder": "<div class=\"form-row\">\r\n    <label  for=\"node-input-commandText\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateAutoResponder.respondTo\"></span></label>\r\n    <input  type=\"text\" id=\"node-input-commandText\">\r\n</div>",
+    "datetime": "<hr>\r\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\r\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateDateTime.section_addresses\"></span>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaDateTime\" style=\"width:155px\"><i class=\"fa fa-calendar\"></i> <span data-i18n=\"knxUltimateDateTime.gaDateTime\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaDateTime\" style=\"width:110px\" placeholder=\"1/7/1\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameDateTime\" style=\"flex:1; min-width:70px\" placeholder=\"DateTime object\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.nameDateTime\">\r\n    <label for=\"node-input-dptDateTime\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptDateTime\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaDate\" style=\"width:155px\"><i class=\"fa fa-calendar-o\"></i> <span data-i18n=\"knxUltimateDateTime.gaDate\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaDate\" style=\"width:110px\" placeholder=\"1/7/2\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameDate\" style=\"flex:1; min-width:70px\" placeholder=\"Date object\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.nameDate\">\r\n    <label for=\"node-input-dptDate\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptDate\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaTime\" style=\"width:155px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateDateTime.gaTime\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaTime\" style=\"width:110px\" placeholder=\"1/7/3\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameTime\" style=\"flex:1; min-width:70px\" placeholder=\"Time object\" data-i18n=\"[placeholder]knxUltimateDateTime.placeholders.nameTime\">\r\n    <label for=\"node-input-dptTime\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptTime\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\r\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateDateTime.section_send\"></span>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-sendOnDeploy\" style=\"width:180px\"><i class=\"fa fa-play\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-sendOnDeploy\"></span></label>\r\n    <input type=\"checkbox\" id=\"node-input-sendOnDeploy\" style=\"width:auto\">\r\n  </div>\r\n\r\n  <div class=\"form-row knx-datetime-deploy-options\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-sendOnDeployDelay\" style=\"width:180px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-sendOnDeployDelay\"></span></label>\r\n    <input type=\"number\" id=\"node-input-sendOnDeployDelay\" style=\"width:120px\">\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-periodicSend\" style=\"width:180px\"><i class=\"fa fa-repeat\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-periodicSend\"></span></label>\r\n    <input type=\"checkbox\" id=\"node-input-periodicSend\" style=\"width:auto\">\r\n  </div>\r\n\r\n  <div class=\"form-row knx-datetime-periodic-options\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-periodicSendInterval\" style=\"width:180px\"><i class=\"fa fa-hourglass\"></i> <span data-i18n=\"knxUltimateDateTime.node-input-periodicSendInterval\"></span></label>\r\n    <input type=\"number\" id=\"node-input-periodicSendInterval\" style=\"width:120px\">\r\n    <select id=\"node-input-periodicSendUnit\" style=\"width:160px\">\r\n      <option value=\"s\" data-i18n=\"knxUltimateDateTime.unit_seconds\"></option>\r\n      <option value=\"m\" data-i18n=\"knxUltimateDateTime.unit_minutes\"></option>\r\n    </select>\r\n  </div>",
+    "watchdog": "<div class=\"form-row\">\r\n        <label for=\"node-input-checkLevel\"><i class=\"fa fa-search\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-checkLevel\"></span> </label>\r\n        <select id=\"node-input-checkLevel\">\r\n            <option value=\"Ethernet\" data-i18n=\"knxUltimateWatchDog.selectlists.Ethernet\"></option>\r\n            <option value=\"Eth+KNX\" data-i18n=\"knxUltimateWatchDog.selectlists.EthKNX\"></option>\r\n        </select>\r\n    </div>\r\n    <div class=\"form-row\" id=\"divHost\">\r\n        <label for=\"node-input-topic\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-topic\"></span></label>\r\n        <input style=\"width:90px;\" type=\"text\" id=\"node-input-topic\" data-i18n=\"[placeholder]knxUltimateWatchDog.placeholder.monitor\"> <span data-i18n=\"knxUltimateWatchDog.booleanHint\"></span>\r\n    </div>  \r\n    \r\n    <div class=\"form-row\">\r\n        <input type=\"checkbox\" id=\"node-input-autoStart\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n        <label style=\"width:auto\" for=\"node-input-autoStart\">&nbsp;&nbsp;<i class=\"fa fa-play-circle\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-autoStart\"></span> </label>\r\n    </div>\r\n    <div class=\"form-row\">\r\n        <input type=\"checkbox\" id=\"node-input-listenToKnxUltimateNodeErrors\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n        <label style=\"width:auto\" for=\"node-input-listenToKnxUltimateNodeErrors\">&nbsp;&nbsp;<i class=\"fa fa-exclamation-triangle\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-listenToKnxUltimateNodeErrors\"></span> </label>\r\n    </div>\r\n    \r\n    <div id=\"advancedOptionsAccordion\">\r\n        <h3><span data-i18n=\"knxUltimateWatchDog.properties.advancedOptionsAccordion\"></span></h3>\r\n        <div>\r\n            <p>\r\n                <div class=\"form-row\">\r\n                    <label for=\"node-input-retryInterval\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-retryInterval\"></span></label>\r\n                    <input type=\"text\" id=\"node-input-retryInterval\">\r\n                </div>\r\n                <div class=\"form-row\">\r\n                    <label for=\"node-input-maxRetry\"><i class=\"fa fa-undo\"></i> <span data-i18n=\"knxUltimateWatchDog.properties.node-input-maxRetry\"></span></label>\r\n                    <input type=\"text\" id=\"node-input-maxRetry\">\r\n                </div>\r\n            </p>\r\n        </div>\r\n    </div>",
+    "globalcontext": "<div class=\"form-tips\" style=\"margin-bottom:16px\" data-i18n=\"knxUltimateGlobalContext.advanced.warning\"></div>\r\n\r\n<div class=\"form-row\">\r\n    <label for=\"node-input-exposeAsVariable\" style=\"width:60%;\">\r\n        <i class=\"fa fa-link\"></i>\r\n        <span data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariable\"></span>\r\n    </label>\r\n    <select id=\"node-input-exposeAsVariable\" style=\"width:35%;\">\r\n        <option value=\"exposeAsVariableNO\" data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariableNO\"></option>\r\n        <option value=\"exposeAsVariableREADONLY\" data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariableREADONLY\"></option>\r\n        <option value=\"exposeAsVariableREADWRITE\" data-i18n=\"knxUltimateGlobalContext.advanced.exposeAsVariableREADWRITE\"></option>\r\n    </select>\r\n</div>\r\n\r\n<div class=\"form-row\">\r\n    <label for=\"node-input-writeExecutionInterval\" style=\"width:60%;\">\r\n        <i class=\"fa fa-link\"></i>\r\n        <span data-i18n=\"knxUltimateGlobalContext.advanced.writeExecutionInterval\"></span>\r\n    </label>\r\n    <select id=\"node-input-writeExecutionInterval\" style=\"width:35%;\">\r\n        <option value=250 data-i18n=\"knxUltimateGlobalContext.interval_250ms\"></option>\r\n        <option value=500 data-i18n=\"knxUltimateGlobalContext.interval_500ms\"></option>\r\n        <option value=1000 data-i18n=\"knxUltimateGlobalContext.interval_1000ms_default\"></option>\r\n        <option value=1500 data-i18n=\"knxUltimateGlobalContext.interval_1500ms\"></option>\r\n        <option value=2000 data-i18n=\"knxUltimateGlobalContext.interval_2000ms\"></option>\r\n    </select>\r\n</div>\r\n\r\n<div class=\"form-row\">\r\n    <label for=\"node-input-contextStorage\" style=\"width:60%;\">\r\n        <i class=\"fa fa-tag\"></i> <span data-i18n=\"knxUltimateGlobalContext.contextStorage\"></span>\r\n    </label>\r\n    <input style=\"width:35%;\" type=\"text\" id=\"node-input-contextStorage\" data-i18n=\"[placeholder]knxUltimateGlobalContext.contextStoragePlaceholder\" />\r\n</div>",
+    "logger": "<div class=\"form-row\">\r\n        <label for=\"node-input-topic\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-topic\"></span></label>\r\n        <input type=\"text\" id=\"node-input-topic\" data-i18n=\"[placeholder]knxUltimateLogger.properties.node-input-topic\">\r\n    </div>\r\n    \r\n      \r\n    \r\n    <div id=\"mlxETSFileAccordion\">\r\n        <h3><span data-i18n=\"knxUltimateLogger.properties.mlxETSFileAccordion\"></span></h3>\r\n        <div>\r\n            <p>\r\n                 <div class=\"form-row\">\r\n                    <input type=\"checkbox\" id=\"node-input-autoStartTimerCreateETSXML\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n                    <label style=\"width:auto\" for=\"node-input-autoStartTimerCreateETSXML\">&nbsp;&nbsp;<i class=\"fa fa-play-circle\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-autoStartTimerCreateETSXML\"></span> </label>\r\n                </div> \r\n                 <div class=\"form-row\">\r\n                    <label style=\"width:290px\" for=\"node-input-saveMode\"><i class=\"fa fa-save\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-saveMode\"></span></label>\r\n                    <select style=\"width:100%\" id=\"node-input-saveMode\">\r\n                        <option value=\"emit\" data-i18n=\"knxUltimateLogger.selectlists.saveMode.emit\"></option>\r\n                        <option value=\"emit_save\" data-i18n=\"knxUltimateLogger.selectlists.saveMode.emit_save\"></option>\r\n                    </select>\r\n                </div>\r\n                <div class=\"form-row\" id=\"knx-logger-filePath-row\">\r\n                    <label style=\"width:290px\" for=\"node-input-filePath\"><i class=\"fa fa-file-text-o\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-filePath\"></span></label>\r\n                    <input style=\"width:calc(100% - 80px)\" type=\"text\" id=\"node-input-filePath\" data-i18n=\"[placeholder]knxUltimateLogger.placeholder.node-input-filePath\">\r\n                    <button type=\"button\" class=\"red-ui-button\" id=\"knx-logger-downloadButton\" style=\"margin-left:6px;\" title=\"Download\">\r\n                        <i class=\"fa fa-download\"></i>\r\n                    </button>\r\n                </div>                \r\n                <div class=\"form-row\">\r\n                    <label style=\"width:290px\" for=\"node-input-intervalCreateETSXML\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-intervalCreateETSXML\"></span></label>\r\n                    <input style=\"width:90px\" type=\"number\" id=\"node-input-intervalCreateETSXML\">\r\n                </div>\r\n                <div class=\"form-row\">\r\n                    <label style=\"width:290px\" for=\"node-input-maxRowsInETSXML\"><i class=\"fa fa-bars\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-maxRowsInETSXML\"></span></label>\r\n                    <input style=\"width:90px\" type=\"number\" id=\"node-input-maxRowsInETSXML\">\r\n                </div>               \r\n            </p>\r\n        </div>\r\n\r\n        <h3><span data-i18n=\"knxUltimateLogger.properties.telegramCounter\"></span></h3>\r\n        <div>\r\n            <p>\r\n                <div class=\"form-row\">\r\n                    <input type=\"checkbox\" id=\"node-input-autoStartTimerTelegramCounter\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n                    <label style=\"width:auto\" for=\"node-input-autoStartTimerTelegramCounter\">&nbsp;&nbsp;<i class=\"fa fa-play-circle\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-autoStartTimerCreateETSXML\"></span> </label>\r\n                </div>  \r\n                <div class=\"form-row\">\r\n                    <label style=\"width:290px\" for=\"node-input-intervalTelegramCount\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateLogger.properties.node-input-intervalTelegramCount\"></span></label>\r\n                    <input style=\"width:90px\" type=\"number\" id=\"node-input-intervalTelegramCount\">\r\n                </div>                \r\n            </p>\r\n        </div>\r\n    </div>",
+    "staircase": "<div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-outputtopic\" style=\"width:180px\"><i class=\"fa fa-comment\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-outputtopic\"></span></label>\r\n    <input type=\"text\" id=\"node-input-outputtopic\" style=\"flex:1\" placeholder=\"events/staircase\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.outputtopic\">\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\r\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateStaircase.section_commands\"></span>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaOutput\" style=\"width:155px\"><i class=\"fa fa-lightbulb-o\"></i> <span data-i18n=\"knxUltimateStaircase.output\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaOutput\" style=\"width:110px\" placeholder=\"1/1/2\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameOutput\" style=\"flex:1; min-width:70px\" placeholder=\"Staircase actuator\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.outputName\">\r\n    <label for=\"node-input-dptOutput\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptOutput\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaStatus\" style=\"width:155px\"><i class=\"fa fa-info-circle\"></i> <span data-i18n=\"knxUltimateStaircase.status\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaStatus\" style=\"width:110px\" placeholder=\"1/1/3\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameStatus\" style=\"flex:1; min-width:70px\" placeholder=\"Status LED\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.statusName\">\r\n    <label for=\"node-input-dptStatus\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptStatus\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div style=\"border-top:1px solid #ccc; margin:10px 0 6px;\"></div>\r\n\r\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\r\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateStaircase.section_inputs\"></span>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaTrigger\" style=\"width:155px\"><i class=\"fa fa-bolt\"></i> <span data-i18n=\"knxUltimateStaircase.trigger\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaTrigger\" style=\"width:110px\" placeholder=\"1/1/1\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameTrigger\" style=\"flex:1; min-width:70px\" placeholder=\"Living room switch\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.triggerName\">\r\n    <label for=\"node-input-dptTrigger\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptTrigger\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaOverride\" style=\"width:155px\"><i class=\"fa fa-toggle-on\"></i> <span data-i18n=\"knxUltimateStaircase.override\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaOverride\" style=\"width:110px\" placeholder=\"1/1/4\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameOverride\" style=\"flex:1; min-width:70px\" placeholder=\"Maintenance override\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.overrideName\">\r\n    <label for=\"node-input-dptOverride\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptOverride\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaBlock\" style=\"width:155px\"><i class=\"fa fa-hand-paper-o\"></i> <span data-i18n=\"knxUltimateStaircase.block\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaBlock\" style=\"width:110px\" placeholder=\"1/1/5\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameBlock\" style=\"flex:1; min-width:70px\" placeholder=\"Block command\" data-i18n=\"[placeholder]knxUltimateStaircase.placeholders.blockName\">\r\n    <label for=\"node-input-dptBlock\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptBlock\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-timerSeconds\" style=\"width:180px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-timerSeconds\"></span></label>\r\n    <input type=\"number\" id=\"node-input-timerSeconds\" style=\"width:140px\" min=\"1\">\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-extendMode\" style=\"width:180px\"><i class=\"fa fa-repeat\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-extendMode\"></span></label>\r\n    <select id=\"node-input-extendMode\" style=\"flex:1\">\r\n      <option value=\"restart\" data-i18n=\"knxUltimateStaircase.extend_restart\"></option>\r\n      <option value=\"extend\" data-i18n=\"knxUltimateStaircase.extend_extend\"></option>\r\n      <option value=\"ignore\" data-i18n=\"knxUltimateStaircase.extend_ignore\"></option>\r\n    </select>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-triggerOffCancels\" style=\"width:180px\"><i class=\"fa fa-power-off\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-triggerOffCancels\"></span></label>\r\n    <select id=\"node-input-triggerOffCancels\" style=\"flex:1\">\r\n      <option value=\"yes\" data-i18n=\"knxUltimateStaircase.opt_yes\"></option>\r\n      <option value=\"no\" data-i18n=\"knxUltimateStaircase.opt_no\"></option>\r\n    </select>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-blockAction\" style=\"width:180px\"><i class=\"fa fa-ban\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-blockAction\"></span></label>\r\n    <select id=\"node-input-blockAction\" style=\"flex:1\">\r\n      <option value=\"off\" data-i18n=\"knxUltimateStaircase.block_off\"></option>\r\n      <option value=\"keep\" data-i18n=\"knxUltimateStaircase.block_keep\"></option>\r\n    </select>\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-preWarnEnable\" style=\"width:180px\"><i class=\"fa fa-exclamation-triangle\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnEnable\"></span></label>\r\n    <input type=\"checkbox\" id=\"node-input-preWarnEnable\" style=\"width:auto\">\r\n  </div>\r\n\r\n  <div class=\"form-row knx-staircase-prewarn\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-preWarnSeconds\" style=\"width:180px\"><i class=\"fa fa-hourglass-end\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnSeconds\"></span></label>\r\n    <input type=\"number\" id=\"node-input-preWarnSeconds\" style=\"width:140px\" min=\"1\">\r\n  </div>\r\n\r\n  <div class=\"form-row knx-staircase-prewarn\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-preWarnMode\" style=\"width:180px\"><i class=\"fa fa-bullhorn\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnMode\"></span></label>\r\n    <select id=\"node-input-preWarnMode\" style=\"flex:1\">\r\n      <option value=\"status\" data-i18n=\"knxUltimateStaircase.prewarn_status\"></option>\r\n      <option value=\"flash\" data-i18n=\"knxUltimateStaircase.prewarn_flash\"></option>\r\n    </select>\r\n  </div>\r\n\r\n  <div class=\"form-row knx-staircase-prewarn knx-staircase-prewarn-flash\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-preWarnFlashMs\" style=\"width:180px\"><i class=\"fa fa-lightbulb-o\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-preWarnFlashMs\"></span></label>\r\n    <input type=\"number\" id=\"node-input-preWarnFlashMs\" style=\"width:140px\" min=\"50\">\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-emitEvents\" style=\"width:180px\"><i class=\"fa fa-sign-out\"></i> <span data-i18n=\"knxUltimateStaircase.node-input-emitEvents\"></span></label>\r\n    <input type=\"checkbox\" id=\"node-input-emitEvents\" style=\"width:auto\">\r\n  </div>\r\n\r\n  <br/><br/><br/><br/>",
+    "garage": "<div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-outputtopic\" style=\"width:180px\"><i class=\"fa fa-comment\"></i> <span data-i18n=\"knxUltimateGarage.node-input-outputtopic\"></span></label>\r\n    <input type=\"text\" id=\"node-input-outputtopic\" style=\"flex:1\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.outputtopic\">\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\r\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateGarage.section_commands\"></span>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaCommand\" style=\"width:155px\"><i class=\"fa fa-exchange\"></i> <span data-i18n=\"knxUltimateGarage.command\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaCommand\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameCommand\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.commandName\">\r\n    <label for=\"node-input-dptCommand\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptCommand\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaImpulse\" style=\"width:155px\"><i class=\"fa fa-bolt\"></i> <span data-i18n=\"knxUltimateGarage.impulse\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaImpulse\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameImpulse\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.impulseName\">\r\n    <label for=\"node-input-dptImpulse\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptImpulse\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaMoving\" style=\"width:155px\"><i class=\"fa fa-arrows-h\"></i> <span data-i18n=\"knxUltimateGarage.moving\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaMoving\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameMoving\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.movingName\">\r\n    <label for=\"node-input-dptMoving\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptMoving\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaObstruction\" style=\"width:155px\"><i class=\"fa fa-exclamation-triangle\"></i> <span data-i18n=\"knxUltimateGarage.obstruction\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaObstruction\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameObstruction\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.obstructionName\">\r\n    <label for=\"node-input-dptObstruction\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptObstruction\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div style=\"border-top:1px solid #ccc; margin:10px 0 6px;\"></div>\r\n\r\n  <div class=\"form-row\" style=\"margin:4px 0 2px;\">\r\n    <span style=\"font-weight:bold;\" data-i18n=\"knxUltimateGarage.section_inputs\"></span>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaHoldOpen\" style=\"width:155px\"><i class=\"fa fa-pause\"></i> <span data-i18n=\"knxUltimateGarage.holdOpen\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaHoldOpen\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameHoldOpen\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.holdOpenName\">\r\n    <label for=\"node-input-dptHoldOpen\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptHoldOpen\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaDisable\" style=\"width:155px\"><i class=\"fa fa-ban\"></i> <span data-i18n=\"knxUltimateGarage.disable\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaDisable\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-nameDisable\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.disableName\">\r\n    <label for=\"node-input-dptDisable\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptDisable\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px;\">\r\n    <label for=\"node-input-gaPhotocell\" style=\"width:155px\"><i class=\"fa fa-lightbulb-o\"></i> <span data-i18n=\"knxUltimateGarage.photocell\"></span></label>\r\n    <input type=\"text\" id=\"node-input-gaPhotocell\" style=\"width:110px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.ga\">\r\n    <input type=\"text\" id=\"node-input-namePhotocell\" style=\"flex:1; min-width:70px\" data-i18n=\"[placeholder]knxUltimateGarage.placeholders.photocellName\">\r\n    <label for=\"node-input-dptPhotocell\" style=\"width:30px; text-align:right\">DPT</label>\r\n    <input type=\"text\" id=\"node-input-dptPhotocell\" style=\"width:75px\" readonly>\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-autoCloseEnable\" style=\"width:180px\"><i class=\"fa fa-clock-o\"></i> <span data-i18n=\"knxUltimateGarage.autoCloseEnable\"></span></label>\r\n    <input type=\"checkbox\" id=\"node-input-autoCloseEnable\" style=\"width:auto\">\r\n  </div>\r\n\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-autoCloseSeconds\" style=\"width:180px\"><i class=\"fa fa-hourglass-end\"></i> <span data-i18n=\"knxUltimateGarage.autoCloseSeconds\"></span></label>\r\n    <input type=\"number\" id=\"node-input-autoCloseSeconds\" style=\"width:140px\" min=\"1\">\r\n  </div>\r\n\r\n  <hr>\r\n  <div class=\"form-row\" style=\"display:flex; align-items:center;\">\r\n    <label for=\"node-input-emitEvents\" style=\"width:180px\"><i class=\"fa fa-sign-out\"></i> <span data-i18n=\"knxUltimateGarage.node-input-emitEvents\"></span></label>\r\n    <input type=\"checkbox\" id=\"node-input-emitEvents\" style=\"width:auto\">\r\n  </div>\r\n\r\n  <br/><br/><br/><br/>",
+    "scenecontroller": "<div id=\"GAandDPT\">\r\n    <div class=\"form-row\">\r\n        <label for=\"node-input-topic\" style=\"width:100px;\"><i class=\"fa fa-play\"></i> <span data-i18n=\"knxUltimateSceneController.properties.node-input-topic\"></span></label>\r\n        <input type=\"text\" id=\"node-input-topic\" placeholder=\"Ex: 1/1/1\" style=\"width:80px;margin-left: 5px; text-align: left;\">\r\n       \r\n        <label for=\"node-input-dpt\" style=\"width:90px; margin-left: 0px; text-align: right;\"><i class=\"fa fa-microchip\"></i>\r\n            <span data-i18n=\"knxUltimateSceneController.properties.node-input-dpt\"></span> </label>\r\n        <select id=\"node-input-dpt\" style=\"width:140px;\"></select>\r\n       \r\n        <label for=\"node-input-topicTrigger\" style=\"width:60px;text-align: right;\"><i class=\"fa fa-bolt\"></i> <span data-i18n=\"knxUltimateSceneController.properties.node-input-topicTrigger\"></span></label>\r\n        <input type=\"text\" id=\"node-input-topicTrigger\" placeholder=\"Ex: 5 or true\" style=\"width:100px;margin-left: 5px; text-align: left;\">\r\n        \r\n    </div>\r\n    <div class=\"form-row\">\r\n        <label for=\"node-input-topicSave\" style=\"width:100px;\"><i class=\"fa fa-floppy-o\"></i> <span data-i18n=\"knxUltimateSceneController.properties.node-input-topicSave\"></span></label>\r\n        <input type=\"text\" id=\"node-input-topicSave\" placeholder=\"Ex: 1/1/2\" style=\"width:80px;margin-left: 5px; text-align: left;\">\r\n        \r\n        <label for=\"node-input-dptSave\" style=\"width:90px; margin-left: 0px; text-align: right;\"><i class=\"fa fa-microchip\"></i>\r\n            <span data-i18n=\"knxUltimateSceneController.properties.node-input-dpt\"></span> </label>\r\n        <select id=\"node-input-dptSave\" style=\"width:140px;\"></select>\r\n\r\n        <label for=\"node-input-topicSaveTrigger\" style=\"width:60px;text-align: right;\"><i class=\"fa fa-bolt\"></i>  <span data-i18n=\"knxUltimateSceneController.properties.node-input-topicTrigger\"></span></label>\r\n        <input type=\"text\" id=\"node-input-topicSaveTrigger\" data-i18n=\"[placeholder]knxUltimateSceneController.placeholder.valueexample\" style=\"width:100px;margin-left: 5px; text-align: left;\">\r\n    </div>\r\n</div>\r\n\r\n<div class=\"form-row\" id=\"divTopic\">\r\n    <label for=\"node-input-outputtopic\"><i class=\"fa fa-tasks\"></i>  <span data-i18n=\"knxUltimateSceneController.properties.node-input-outputtopic\"></span> </label>\r\n    <input type=\"text\" id=\"node-input-outputtopic\" data-i18n=\"[placeholder]knxUltimateSceneController.placeholder.leaveempty\">\r\n</div>\r\n\r\n\r\n<dt><i class=\"fa fa-code-fork\"></i>&nbsp; <span data-i18n=\"knxUltimateSceneController.other.sceneConfig\"></span></dt>\r\n<div class=\"form-row node-input-rule-container-row\">\r\n    <ol id=\"node-input-rule-container\"></ol>\r\n</div>\r\n\r\n<div class=\"form-row\">\r\n    <p><span data-i18n=\"knxUltimateSceneController.other.add\"></span></p>\r\n</div>",
+    "loadcontrol": "<div class=\"form-row\">\r\n    <i class=\"fa fa-sliders\"></i>\r\n    <label style=\"width:100px\" for=\"node-input-controlMode\">\r\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-controlMode\"></span>\r\n    </label>\r\n    <select style=\"width:40%\" id=\"node-input-controlMode\">\r\n        <option value=\"auto\" data-i18n=\"knxUltimateLoadControl.selectlists.controlModeAuto\"></option>\r\n        <option value=\"msg\" data-i18n=\"knxUltimateLoadControl.selectlists.controlModeMsg\"></option>\r\n    </select>\r\n</div>\r\n\r\n<div class=\"form-row knx-lc-auto-only\">\r\n    <i class=\"fa fa-battery-full\"></i>\r\n    <label style=\"width:100px\" for=\"node-input-topic\">\r\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-topic\"></span>\r\n    </label>\r\n    <input style=\"width:15%\" type=\"text\" id=\"node-input-topic\" placeholder=\"Ex: 1/1/1\" />\r\n    <select style=\"width:15%\" id=\"node-input-dpt\"></select>\r\n</div>\r\n\r\n<div class=\"form-row knx-lc-auto-only\">\r\n    <i class=\"fa fa-exclamation\"></i>\r\n    <label style=\"width:125px\" for=\"node-input-wattLimit\">\r\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-wattLimit\"></span>\r\n    </label>\r\n    <input style=\"width:40%\" type=\"text\" id=\"node-input-wattLimit\" placeholder=\"Ex. 3000\">      \r\n</div>\r\n\r\n<div class=\"form-row knx-lc-auto-only\">\r\n    <i class=\"fa fa-toggle-off\"></i>\r\n    <label style=\"width:125px\" for=\"node-input-sheddingCheckInterval\">\r\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-sheddingCheckInterval\"></span>\r\n    </label>\r\n    <input style=\"width:40%\" type=\"text\" id=\"node-input-sheddingCheckInterval\" placeholder=\"\">      \r\n</div>\r\n\r\n<div class=\"form-row knx-lc-auto-only\">\r\n    <i class=\"fa fa-toggle-on\"></i>\r\n    <label style=\"width:125px\" for=\"node-input-sheddingRestoreDelay\">\r\n            <span data-i18n=\"knxUltimateLoadControl.properties.node-input-sheddingRestoreDelay\"></span>\r\n    </label>\r\n    <input style=\"width:40%\" type=\"text\" id=\"node-input-sheddingRestoreDelay\" placeholder=\"\">      \r\n</div>\r\n\r\n\r\n\r\n<!-- LOAD CONTROL -->\r\n<hr>\r\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 1</b>&nbsp;<span data-i18n=\"knxUltimateLoadControl.primoaldistacco\"></span> <br/><br/>\r\n\r\n\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-power-off\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA1\" placeholder=\"Ex: 1/1/1\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT1\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name1\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-battery-half\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA1\" placeholder=\"Optional\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT1\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName1\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\">\r\n    <input type=\"checkbox\" id=\"node-input-autoRestore1\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n    &nbsp;\r\n    <label style=\"width:85%\" for=\"node-input-autoRestore1\">\r\n        <i class=\"fa fa-toggle-on\"></i>\r\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\r\n    </label>\r\n</div>\r\n\r\n<hr>\r\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 2</b><br/><br/>\r\n\r\n\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-power-off\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA2\" placeholder=\"Control GA\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT2\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name2\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-battery-half\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA2\" placeholder=\"Optional\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT2\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName2\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\">\r\n    <input type=\"checkbox\" id=\"node-input-autoRestore2\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n    &nbsp;\r\n    <label style=\"width:85%\" for=\"node-input-autoRestore2\">\r\n        <i class=\"fa fa-toggle-on\"></i>\r\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\r\n    </label>\r\n</div>\r\n\r\n<hr>\r\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 3</b><br/><br/>\r\n\r\n\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-power-off\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA3\" placeholder=\"Control GA\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT3\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name3\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-battery-half\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA3\" placeholder=\"Optional\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT3\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName3\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\">\r\n    <input type=\"checkbox\" id=\"node-input-autoRestore3\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n    &nbsp;\r\n    <label style=\"width:85%\" for=\"node-input-autoRestore3\">\r\n        <i class=\"fa fa-toggle-on\"></i>\r\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\r\n    </label>\r\n</div>\r\n\r\n<hr>\r\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 4</b><br/><br/>\r\n\r\n\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-power-off\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA4\" placeholder=\"Control GA\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT4\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name4\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-battery-half\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA4\" placeholder=\"Optional\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT4\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName4\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\">\r\n    <input type=\"checkbox\" id=\"node-input-autoRestore4\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n    &nbsp;\r\n    <label style=\"width:85%\" for=\"node-input-autoRestore4\">\r\n        <i class=\"fa fa-toggle-on\"></i>\r\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\r\n    </label>\r\n</div>\r\n\r\n<hr>\r\n<b><span data-i18n=\"knxUltimateLoadControl.title\"></span> 5</b><br/><br/>\r\n\r\n\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-power-off\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-GA5\" placeholder=\"Control GA\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-DPT5\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-Name5\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\" style=\"display:flex; align-items:center; gap:8px; flex-wrap:wrap;\">\r\n    <i class=\"fa fa-battery-half\"></i>\r\n    \r\n    <input style=\"width:95px; flex:0 0 95px; min-width:0\" type=\"text\" id=\"node-input-MonitorGA5\" placeholder=\"Optional\" />\r\n    <select style=\"width:105px; flex:0 0 105px; min-width:0\" id=\"node-input-MonitorDPT5\"></select>\r\n    <input style=\"flex:1 1 120px; min-width:90px\" type=\"text\" id=\"node-input-MonitorName5\" data-i18n=\"[placeholder]knxUltimateLoadControl.properties.node-input-name\">\r\n</div>\r\n<div class=\"form-row\">\r\n    <input type=\"checkbox\" id=\"node-input-autoRestore5\" style=\"display:inline-block; width:auto; vertical-align:top;\">\r\n    &nbsp;\r\n    <label style=\"width:85%\" for=\"node-input-autoRestore5\">\r\n        <i class=\"fa fa-toggle-on\"></i>\r\n        <span data-i18n=\"knxUltimateLoadControl.properties.node-input-autoRestore\"></span>\r\n    </label>\r\n</div>\r\n\r\n</br>\r\n</br>\r\n</br>\r\n</br>",
+    "hatranslator": "<div class=\"form-row\">\r\n    <label for=\"node-input-payloadPropName\"><i class=\"fa fa-ellipsis-h\"></i> <span data-i18n=\"knxUltimateHATranslator.inputProperty\"></span></label>\r\n    <input type=\"text\" id=\"node-input-payloadPropName\" placeholder=\"payload\">\r\n</div>\r\n<div class=\"form-tips\" style=\"margin-bottom:16px\" data-i18n=\"knxUltimateHATranslator.inputHint\"></div>\r\n<div class=\"form-row\">\r\n    <label for=\"node-input-editorcommandText\" style=\"width:100%\"><i class=\"fa fa-tasks\"></i> <span data-i18n=\"knxUltimateHATranslator.translations\"></span></label>\r\n    <div style=\"height:250px; min-height:150px; width:100%;\" class=\"node-text-editor\" id=\"node-input-editorcommandText\"></div>\r\n</div>\r\n<div class=\"form-tips\" data-i18n=\"knxUltimateHATranslator.translationHint\"></div>"
   }
 
   // All supported locales travel with the Utility. The bundle therefore
