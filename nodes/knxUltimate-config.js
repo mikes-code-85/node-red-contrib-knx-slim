@@ -1607,16 +1607,6 @@ module.exports = (RED) => {
                       .then(function () { })
                       .catch(function () { })
                   }
-                } else if (_input.hasOwnProperty('isLogger')) {
-                  // 26/03/2020 Coronavirus is slightly decreasing the affected numer of people. Logger Node
-                  // 24/03/2021 Logger Node, i'll pass cemiETS
-                  if (_cemiETS !== undefined) {
-                    // new Promise((resolve, reject) => {
-                    _input.handleSend(_cemiETS)
-                    //    resolve(true); // fulfilled
-                    // reject("error"); // rejected
-                    // }).then(function () { }).catch(function () { });
-                  }
                 } else if (_input.listenallga === true && universalNodeAcceptsGA(_input, _dest)) {
                   // 25/10/2019 TRY TO AUTO DECODE IF Group address not found in the CSV
                   const msg = buildInputMessage({
@@ -1715,17 +1705,6 @@ module.exports = (RED) => {
                   }
                   _input.setNodeStatus({ fill: 'blue', shape: 'dot', text: 'RAW', payload: _evt, GA: _dest, dpt: '', devicename: _src })
                   _input.handleSend(msg)
-                } else
-                if (_input.hasOwnProperty('isLogger')) {
-                  // 26/03/2020 Coronavirus is slightly decreasing the affected numer of people. Logger Node
-                  // 24/03/2021 Logger Node, i'll pass cemiETS
-                  if (_cemiETS !== undefined) {
-                    // new Promise((resolve, reject) => {
-                    _input.handleSend(_cemiETS)
-                    //    resolve(true); // fulfilled
-                    // reject("error"); // rejected
-                    // }).then(function () { }).catch(function () { });
-                  }
                 } else if (_input.listenallga === true && universalNodeAcceptsGA(_input, _dest)) {
                   const msg = buildInputMessage({
                     _srcGA: _src,
@@ -1821,18 +1800,6 @@ module.exports = (RED) => {
                   }
                   _input.setNodeStatus({ fill: 'grey', shape: 'dot', text: 'RAW Read', payload: '', GA: _dest, dpt: '', devicename: _src })
                   _input.handleSend(msg)
-                } else
-                if (_input.hasOwnProperty('isLogger')) {
-                  // 26/03/2020 Coronavirus is slightly decreasing the affected numer of people. Logger Node
-                  // node.sysLogger?.info("BANANA isLogger", _evt, _src, _dest, _rawValue, _cemiETS);
-                  // 24/03/2021 Logger Node, i'll pass cemiETS
-                  if (_cemiETS !== undefined) {
-                    // new Promise((resolve, reject) => {
-                    _input.handleSend(_cemiETS)
-                    //    resolve(true); // fulfilled
-                    // reject("error"); // rejected
-                    // }).then(function () { }).catch(function () { });
-                  }
                 } else if (_input.listenallga === true && universalNodeAcceptsGA(_input, _dest)) {
                   // Read Request
                   const msg = buildInputMessage({
@@ -1996,8 +1963,6 @@ module.exports = (RED) => {
           node.nodeClients.forEach((_input) => {
             // 19/03/2020 in the middle of coronavirus. Whole italy is red zone, closed down. Scene Controller implementation
             if (_input.hasOwnProperty('isSceneController')) {
-            } else if (_input.hasOwnProperty('isLogger')) {
-              // 26/03/2020 Coronavirus is slightly decreasing the affected numer of people. Logger Node
             } else if (_input.listenallga === true) {
             } else if (_input.topic == _oKNXMessage.grpaddr) {
               if (_input.hasOwnProperty('isWatchDog')) {

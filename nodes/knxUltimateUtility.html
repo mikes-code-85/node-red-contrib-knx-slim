@@ -35,8 +35,8 @@
             return !descriptor || typeof descriptor.validate !== 'function' || descriptor.validate.call(validationContext(this), value);
           }
         },
-        // The bus address is shared by WatchDog, Logger, SceneController and
-        // LoadControl. Imports that omit it must not inherit WatchDog's sample GA.
+        // The bus address is shared by WatchDog. Imports that omit it must not
+        // inherit WatchDog's sample GA.
         topic: {
           value: '',
           validate: function (value) {
@@ -114,7 +114,6 @@
       outputLabels: function (index) {
         if (this.utilityType === 'alerter') return text('outputs.' + index);
         const selected = definition(this.utilityType);
-        if (this.utilityType === 'logger') return text('logger_outputs.' + index);
         const labels = selected?.outputLabels;
         if (typeof labels === 'function') return labels.call(this, index);
         return Array.isArray(labels) ? labels[index] : '';
@@ -299,12 +298,6 @@
       <option value="datetime" data-i18n="knxUltimateUtility.types.datetime"></option>
       <option value="watchdog" data-i18n="knxUltimateUtility.types.watchdog"></option>
       <option value="globalcontext" data-i18n="knxUltimateUtility.types.globalcontext"></option>
-      <option value="logger" data-i18n="knxUltimateUtility.types.logger"></option>
-      <option value="staircase" data-i18n="knxUltimateUtility.types.staircase"></option>
-      <option value="garage" data-i18n="knxUltimateUtility.types.garage"></option>
-      <option value="scenecontroller" data-i18n="knxUltimateUtility.types.scenecontroller"></option>
-      <option value="loadcontrol" data-i18n="knxUltimateUtility.types.loadcontrol"></option>
-      <option value="hatranslator" data-i18n="knxUltimateUtility.types.hatranslator"></option>
     </select>
   </div>
   <div class="form-row" id="knx-utility-gateway-row">

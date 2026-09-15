@@ -7,8 +7,7 @@ const profiles = Object.freeze({
   autoresponder: 'knxUltimateAutoResponder',
   datetime: 'knxUltimateDateTime',
   watchdog: 'knxUltimateWatchDog',
-  globalcontext: 'knxUltimateGlobalContext',
-  logger: 'knxUltimateLogger'
+  globalcontext: 'knxUltimateGlobalContext'
 })
 
 const locales = Object.freeze(['en', 'it', 'de', 'fr', 'es', 'zh-CN'])

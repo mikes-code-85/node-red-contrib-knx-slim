@@ -5,7 +5,6 @@ const fs = require('fs')
 const path = require('path')
 const dptlib = require('knxultimate').dptlib
 const KNXClient = require('knxultimate').KNXClient
-const { normalizeAuthFromAccessTokenQuery } = require('./utils/httpAdminAccessToken')
 
 // DATAPONT MANIPULATION HELPERS
 // ####################
@@ -66,10 +65,9 @@ module.exports = (RED) => {
 
     // }
 
-          fetchData()
-    })
-
-          try {
+    // Endpoint for reading csv/esf by the other nodes
+    RED.httpAdmin.get('/knxUltimatecsv', RED.auth.needsPermission('knxUltimate-config.read'), (req, res) => {
+      try {
         if (typeof req.query.nodeID !== 'undefined' && req.query.nodeID !== null && req.query.nodeID !== '') {
           const _node = RED.nodes.getNode(req.query.nodeID) // Retrieve node.id of the config node.
           if (_node !== null) res.json(RED.nodes.getNode(_node.id).csv)
@@ -153,45 +151,6 @@ module.exports = (RED) => {
       } catch (error) {
       }
     })
-
-    // Shared Logger download for legacy nodes and the private Utility profile.
-    const downloadLoggerFile = (req, res) => {
-      try {
-        const nodeId = (req.query.nodeId || req.query.id || '').toString()
-        if (!nodeId) {
-          res.status(400).json({ error: 'NO_NODE_ID' })
-          return
-        }
-        const loggerNode = RED.nodes.getNode(nodeId)
-        if (!loggerNode || loggerNode.isLogger !== true) {
-          res.status(404).json({ error: 'LOGGER_NOT_FOUND' })
-          return
-        }
-        const filePath = (loggerNode.filePath || '').toString()
-        if (!filePath) {
-          res.status(404).json({ error: 'NO_FILE_PATH' })
-          return
-        }
-        if (!fs.existsSync(filePath)) {
-          res.status(404).json({ error: 'FILE_NOT_FOUND' })
-          return
-        }
-        const safeName = path.basename(filePath) || 'knx-logger.xml'
-        res.setHeader('Content-Type', 'application/xml; charset=utf-8')
-        res.setHeader('Content-Disposition', `attachment; filename="${safeName}"`)
-        const stream = fs.createReadStream(filePath)
-        stream.on('error', (err) => {
-          try { RED.log.error(`KNXUltimateLoggerDownload error reading file ${filePath}: ${err.message}`) } catch (e) {}
-          if (!res.headersSent) res.status(500).json({ error: 'READ_ERROR' })
-        })
-        stream.pipe(res)
-      } catch (error) {
-        try { RED.log.error(`KNXUltimateLoggerDownload error: ${error.message}`) } catch (e) {}
-        if (!res.headersSent) res.status(500).json({ error: 'UNEXPECTED_ERROR' })
-      }
-    }
-    RED.httpAdmin.get('/knxUltimateLoggerDownload', normalizeAuthFromAccessTokenQuery, RED.auth.needsPermission('knxUltimate-config.read'), downloadLoggerFile)
-    RED.httpAdmin.get('/knxUltimateUtility/logger/download', normalizeAuthFromAccessTokenQuery, RED.auth.needsPermission('knxUltimate-config.read'), downloadLoggerFile)
 
     // 2025-09 List interfaces (IA) from KNX Secure keyring
     RED.httpAdmin.get('/knxUltimateKeyringInterfaces', RED.auth.needsPermission('knxUltimate-config.read'), async (req, res) => {
@@ -351,6 +310,8 @@ module.exports = (RED) => {
       }
     })
 
+    // 2025-09 Secure: return list of Data Secure Group Addresses from keyring
+    RED.httpAdmin.get('/knxUltimateKeyringDataSecureGAs', RED.auth.needsPermission('knxUltimate-config.read'), async (req, res) => {
       try {
         let keyringContent = (req.query.keyring || '').toString()
         let password = (req.query.pwd || '').toString()
@@ -380,290 +341,7 @@ module.exports = (RED) => {
       }
     })
 
-      try {
-        const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
-        if (serverId.hueAllResources === null || serverId.hueAllResources === undefined) {
-          throw (new Error('Resource not yet loaded'))
-        }
-        const _lightId = req.query.id
-        const oLight = serverId.hueAllResources.filter((a) => a.id === _lightId)[0]
-        // Infer some useful info, so the HTML part can avoid to query the server
-        // Kelvin
-        try {
-          if (oLight.color_temperature !== undefined && oLight.color_temperature.mirek !== undefined) {
-            oLight.calculatedKelvin = hueColorConverter.ColorConverter.mirekToKelvin(oLight.color_temperature.mirek)
-          }
-        } catch (error) {
-          oLight.calculatedKelvin = undefined
-        }
-        // HEX value from XYBri
-        try {
-          const retRGB = hueColorConverter.ColorConverter.xyBriToRgb(oLight.color.xy.x, oLight.color.xy.y, oLight.dimming.brightness)
-          const ret = `#${hueColorConverter.ColorConverter.rgbHex(retRGB.r, retRGB.g, retRGB.b).toString()}`
-          oLight.calculatedHEXColor = ret
-        } catch (error) {
-          oLight.calculatedHEXColor = undefined
-        }
-        res.json(oLight)
-      } catch (error) {
-      const respondError = (status, message) => {
-        res.status(status).json({ error: message })
-      }
-      try {
-        const rawServerId = req.body?.serverId
-        const serverId = typeof rawServerId === 'string' ? rawServerId.trim() : (rawServerId ? String(rawServerId).trim() : '')
-        if (!serverId) {
-          respondError(400, 'Hue bridge not specified')
-          return
-        }
-        const hueServer = RED.nodes.getNode(serverId)
-        if (!hueServer) {
-          respondError(404, 'Hue bridge not found')
-          return
-        }
-        if (!hueServer.hueManager || !hueServer.hueManager.hueApiV2 || typeof hueServer.hueManager.hueApiV2.put !== 'function') {
-          respondError(503, 'Hue bridge not ready')
-          return
-        }
-        if (hueServer.linkStatus !== 'connected') {
-          respondError(503, 'Hue bridge is not connected')
-          return
-        }
-        const rawDeviceId = req.body?.deviceId
-        const deviceId = typeof rawDeviceId === 'string' ? rawDeviceId.trim() : (rawDeviceId ? String(rawDeviceId).trim() : '')
-        if (!deviceId) {
-          respondError(400, 'Hue device not specified')
-          return
-        }
-        const rawDeviceType = req.body?.deviceType
-        const deviceType = typeof rawDeviceType === 'string' ? rawDeviceType.trim().toLowerCase() : (rawDeviceType ? String(rawDeviceType).trim().toLowerCase() : '')
-        let resourceSnapshot = null
-        if (typeof hueServer.getHueResourceSnapshot === 'function') {
-          try {
-            resourceSnapshot = await hueServer.getHueResourceSnapshot(deviceId, { forceRefresh: false })
-          } catch (error) {
-            resourceSnapshot = null
-          }
-        }
-        const resolvedType = (resourceSnapshot?.type || deviceType || 'light').toLowerCase()
-        const targets = []
-        const addTarget = (id, type) => {
-          if (!id || !type) return
-          const trimmedId = typeof id === 'string' ? id.trim() : String(id).trim()
-          const trimmedType = typeof type === 'string' ? type.trim().toLowerCase() : String(type).trim().toLowerCase()
-          if (trimmedId === '' || trimmedType === '') return
-          targets.push({ id: trimmedId, type: trimmedType })
-        }
-
-        if (resolvedType === 'grouped_light') {
-          let lights = []
-          if (typeof hueServer.getAllLightsBelongingToTheGroup === 'function') {
-            try {
-              lights = await hueServer.getAllLightsBelongingToTheGroup(deviceId)
-            } catch (error) {
-              lights = []
-            }
-          }
-          if (Array.isArray(lights) && lights.length > 0) {
-            lights.forEach((lightResource) => {
-              const ownerId = lightResource?.owner?.rid
-              if (ownerId) {
-                addTarget(ownerId, 'device')
-              } else if (lightResource?.id) {
-                addTarget(lightResource.id, 'light')
-              }
-            })
-          }
-          if (targets.length === 0 && typeof hueServer.getFirstLightInGroup === 'function') {
-            const firstLight = hueServer.getFirstLightInGroup(deviceId)
-            const ownerId = firstLight?.owner?.rid
-            if (ownerId) {
-              addTarget(ownerId, 'device')
-            } else if (firstLight?.id) {
-              addTarget(firstLight.id, 'light')
-            }
-          }
-        } else if (resolvedType === 'device') {
-          addTarget(deviceId, 'device')
-        } else {
-          const ownerId = resourceSnapshot?.owner?.rid
-          if (ownerId) {
-            addTarget(ownerId, 'device')
-          } else {
-            addTarget(deviceId, resolvedType || 'light')
-          }
-        }
-
-        const uniqueTargets = []
-        const seenTargets = new Set()
-        targets.forEach((target) => {
-          const key = `${target.type}:${target.id}`
-          if (!seenTargets.has(key)) {
-            seenTargets.add(key)
-            uniqueTargets.push(target)
-          }
-        })
-
-        if (uniqueTargets.length === 0) {
-          respondError(404, 'Hue device resource unavailable')
-          return
-        }
-
-        const sessionKey = `identify:${deviceId}`
-        const maxDurationMs = 600000
-        const intervalMs = 1000
-        const rawAction = (req.body?.action || '').toString().trim().toLowerCase()
-        const explicitAction = rawAction === 'start' || rawAction === 'stop' ? rawAction : 'toggle'
-
-        const stopIdentifySession = () => {
-          if (typeof hueServer.isHueIdentifySessionActive === 'function' && hueServer.isHueIdentifySessionActive(sessionKey)) {
-            if (typeof hueServer.stopHueIdentifySession === 'function') {
-              hueServer.stopHueIdentifySession(sessionKey, 'manual')
-            }
-            return true
-          }
-          return false
-        }
-
-        if (explicitAction === 'stop') {
-          const wasActive = stopIdentifySession()
-          res.json({ status: 'stopped', wasActive })
-          return
-        }
-
-        if (explicitAction !== 'start') {
-          if (stopIdentifySession()) {
-            res.json({ status: 'stopped', wasActive: true })
-            return
-          }
-        }
-
-        if (explicitAction === 'start' && typeof hueServer.isHueIdentifySessionActive === 'function' && hueServer.isHueIdentifySessionActive(sessionKey)) {
-          res.json({ status: 'started', alreadyActive: true, expiresInMs: maxDurationMs })
-          return
-        }
-
-        if (typeof hueServer.startHueIdentifySession === 'function') {
-          const started = await hueServer.startHueIdentifySession({
-            sessionKey,
-            targets: uniqueTargets,
-            intervalMs,
-            maxDurationMs
-          })
-          if (!started) {
-            respondError(500, 'Unable to start locate session')
-            return
-          }
-          res.json({ status: 'started', expiresInMs: maxDurationMs })
-          return
-        }
-        const identifyPayload = { identify: { action: 'identify' } }
-        for (const target of uniqueTargets) {
-          await hueServer.hueManager.hueApiV2.put(`/resource/${target.type}/${target.id}`, identifyPayload)
-        }
-        res.json({ status: 'started', expiresInMs: 0 })
-      } catch (error) {
-        try { RED.log.error(`KNXUltimate LocateHueDevice error: ${error.message}`) } catch (err) { }
-        res.status(500).json({ error: error.message })
-      }
-    })
-
-      try {
-        const matterServer = RED.nodes.getNode(req.query.serverId)
-        if (matterServer === null || matterServer === undefined) {
-          res.json({ error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        res.json({ devices: matterServer.getCommissionedNodesDetails() })
-      } catch (error) {
-      try {
-        const matterServer = RED.nodes.getNode(req.query.serverId)
-        if (matterServer === null || matterServer === undefined) {
-          res.json({ error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        res.json(matterServer.getNodeStructure(req.query.nodeId))
-      } catch (error) {
-      try {
-        const matterServer = RED.nodes.getNode(req.query.serverId)
-        if (matterServer === null || matterServer === undefined) {
-          res.json({ active: false, percent: 0, error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        res.json(matterServer.getCommissioningProgress(req.query.operationId))
-      } catch (error) {
-      let matterServer
-      const requestedOperationId = String(req.query.operationId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)
-      // Keep direct callers of the pre-progress endpoint backward compatible. The editor
-      // supplies its own id so it can poll; legacy callers receive a server-only id.
-      const operationId = requestedOperationId || `server-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-      try {
-        matterServer = RED.nodes.getNode(req.query.serverId)
-        if (matterServer === null || matterServer === undefined) {
-          res.json({ error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        if (!matterServer.beginCommissioningProgress(operationId)) {
-          res.json({ error: 'Another Matter commissioning operation is already in progress.' })
-          return
-        }
-        const nodeId = await matterServer.commission(req.query.code, {
-          targetHost: req.query.targetHost,
-          onProgress: (progress) => matterServer.reportCommissioningProgress(operationId, progress)
-        })
-        const requestedName = String(req.query.name || '').trim()
-        let renameError = null
-        if (requestedName !== '') {
-          matterServer.reportCommissioningProgress(operationId, {
-            phase: 'naming',
-            percent: 99,
-            message: 'Applying the requested device name…'
-          })
-          try {
-            await matterServer.renameCommissionedNode(nodeId, requestedName)
-          } catch (error) {
-            renameError = error.message
-      try {
-        const matterServer = RED.nodes.getNode(req.query.serverId)
-        if (matterServer === null || matterServer === undefined) {
-          res.json({ error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        const nodeId = String(req.query.nodeId || '').trim()
-        const name = String(req.query.name || '').trim()
-        if (nodeId === '' || name === '') {
-          res.json({ error: 'Missing nodeId or name.' })
-          return
-        }
-        await matterServer.renameCommissionedNode(nodeId, name)
-        res.json({ status: 'ok', nodeId, name })
-      } catch (error) {
-      try {
-        const matterServer = RED.nodes.getNode(req.query.serverId)
-        if (matterServer === null || matterServer === undefined) {
-          res.json({ error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        await matterServer.removeCommissionedNode(req.query.nodeId)
-        res.json({ status: 'ok' })
-      } catch (error) {
-      try {
-        const bridgeConfig = RED.nodes.getNode(req.query.configId)
-        if (bridgeConfig === null || bridgeConfig === undefined || typeof bridgeConfig.getPairingInfo !== 'function') {
-          res.json({ error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        res.json(bridgeConfig.getPairingInfo())
-      } catch (error) {
-      try {
-        const bridgeConfig = RED.nodes.getNode(req.query.configId)
-        if (bridgeConfig === null || bridgeConfig === undefined || typeof bridgeConfig.factoryResetBridge !== 'function') {
-          res.json({ error: 'PLEASE DEPLOY FIRST: then try again.' })
-          return
-        }
-        await bridgeConfig.factoryResetBridge()
-        res.json({ status: 'ok' })
-      } catch (error) {
+    RED.httpAdmin.get('/knxUltimateDpts', (req, res) => {
       try {
         const dpts = Object.entries(dptlib.dpts).filter(onlyDptKeys).map(extractBaseNo).sort(sortBy('base'))
           .reduce(toConcattedSubtypes, [])

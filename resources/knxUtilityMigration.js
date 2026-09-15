@@ -13,17 +13,10 @@
     knxUltimateAutoResponder: Object.freeze({ utilityType: 'autoresponder', inputs: 0, outputs: 0 }),
     knxUltimateDateTime: Object.freeze({ utilityType: 'datetime', inputs: 0, outputs: 0 }),
     knxUltimateWatchDog: Object.freeze({ utilityType: 'watchdog', inputs: 1, outputs: 1 }),
-    knxUltimateGlobalContext: Object.freeze({ utilityType: 'globalcontext', inputs: 0, outputs: 0 }),
-    knxUltimateLogger: Object.freeze({ utilityType: 'logger', inputs: 1, outputs: 2 }),
-    knxUltimateStaircase: Object.freeze({ utilityType: 'staircase', inputs: 1, outputs: 1 }),
-    knxUltimateGarage: Object.freeze({ utilityType: 'garage', inputs: 1, outputs: 1 }),
-    knxUltimateSceneController: Object.freeze({ utilityType: 'scenecontroller', inputs: 1, outputs: 1 }),
-    knxUltimateLoadControl: Object.freeze({ utilityType: 'loadcontrol', inputs: 1, outputs: 1 }),
-    knxUltimateHATranslator: Object.freeze({ utilityType: 'hatranslator', inputs: 1, outputs: 1 })
+    knxUltimateGlobalContext: Object.freeze({ utilityType: 'globalcontext', inputs: 0, outputs: 0 })
   })
   const I18N_PREFIX = 'node-red-contrib-knx-ultimate/knxUltimateUtility:knxUltimateUtility.'
   const EVENT_NAMESPACE = '.knxUltimateUtilityMigration'
-  const HA_TRANSLATION_DEFAULT = 'on:true\noff:false\nactive:true\ninactive:false\nopen:true\nclosed:false\nclose:false\n1:true\n0:false\ntrue:true\nfalse:false\nhome:true\nnot_home:false'
   let activeNotification
 
   function isLegacyUtilityNode (node) {
@@ -42,14 +35,7 @@
     if (!Array.isArray(legacyNodes)) throw new TypeError('Legacy KNX utility nodes must be an array')
     return legacyNodes.map(function (node, index) {
       if (!isLegacyUtilityNode(node)) throw new TypeError(`Entry ${index} is not a supported legacy KNX utility node`)
-      const patch = { index, type: 'knxUltimateUtility', ...LEGACY_NODE_PROFILES[node.type] }
-      if (patch.utilityType === 'hatranslator') {
-        const legacyDefault = node._def && node._def.defaults && node._def.defaults.commandText
-        patch.haTranslationTable = node.commandText !== undefined
-          ? node.commandText
-          : legacyDefault && legacyDefault.value !== undefined ? legacyDefault.value : HA_TRANSLATION_DEFAULT
-      }
-      return patch
+      return { index, type: 'knxUltimateUtility', ...LEGACY_NODE_PROFILES[node.type] }
     })
   }
 
@@ -126,7 +112,6 @@
         inputs: node.inputs === undefined ? patch.inputs : node.inputs,
         outputs: node.outputs === undefined ? patch.outputs : node.outputs
       }
-      if (patch.utilityType === 'hatranslator') oldValues.haTranslationTable = node.haTranslationTable
       return {
         node,
         patch,
@@ -149,7 +134,6 @@
         node.utilityType = patch.utilityType
         node.inputs = patch.inputs
         node.outputs = patch.outputs
-        if (patch.utilityType === 'hatranslator') node.haTranslationTable = patch.haTranslationTable
         node.changed = true
         node.dirty = true
         node.resize = true

@@ -19,13 +19,7 @@
       "autoresponder": "AutoResponder",
       "datetime": "Date / Heure",
       "watchdog": "WatchDog",
-      "globalcontext": "Contexte global",
-      "logger": "Logger",
-      "staircase": "Éclairage escalier",
-      "garage": "Garage",
-      "scenecontroller": "Contrôleur de scènes",
-      "loadcontrol": "Contrôle des charges",
-      "hatranslator": "Home Assistant Translator"
+      "globalcontext": "Contexte global"
     },
     "invalid_function": "Fonction inconnue. Sélectionnez une fonction prise en charge avant le déploiement.",
     "pins": {
@@ -33,13 +27,7 @@
       "autoresponder": "Aucun port · Répond directement sur le bus KNX",
       "datetime": "Aucun port · Envois programmés et bouton du nœud",
       "watchdog": "1 entrée · 1 sortie",
-      "globalcontext": "Aucun port de flow · Variables du contexte global",
-      "logger": "1 entrée · 2 sorties",
-      "staircase": "1 entrée · 1 sortie",
-      "garage": "1 entrée · 1 sortie",
-      "scenecontroller": "1 entrée · 1 sortie",
-      "loadcontrol": "1 entrée · 1 sortie",
-      "hatranslator": "1 entrée · 1 sortie · Aucune passerelle requise"
+      "globalcontext": "Aucun port de flow · Variables du contexte global"
     },
     "outputs": {
       "0": "Un message par appareil en alerte",
@@ -47,10 +35,6 @@
       "2": "Dernier appareil en alerte"
     },
     "variable_name": "Nom de variable",
-    "variable_name_description": "Lettres uniquement (A–Z, a–z). Ce nom détermine les variables globales <nom>_READ et <nom>_WRITE.",
-    "logger_outputs": {
-      "0": "XML de diagnostic ETS",
-      "1": "Compteur de télégrammes"
-    }
+    "variable_name_description": "Lettres uniquement (A–Z, a–z). Ce nom détermine les variables globales <nom>_READ et <nom>_WRITE."
   }
 }

@@ -19,13 +19,7 @@
       "autoresponder": "AutoResponder",
       "datetime": "日期 / 时间",
       "watchdog": "WatchDog",
-      "globalcontext": "全局上下文",
-      "logger": "日志记录",
-      "staircase": "楼梯照明",
-      "garage": "车库门",
-      "scenecontroller": "场景控制",
-      "loadcontrol": "负载控制",
-      "hatranslator": "Home Assistant Translator"
+      "globalcontext": "全局上下文"
     },
     "invalid_function": "未知功能。部署前请选择支持的功能。",
     "pins": {
@@ -33,13 +27,7 @@
       "autoresponder": "无端口 · 直接响应 KNX 总线请求",
       "datetime": "无端口 · 定时发送和节点按钮",
       "watchdog": "1 个输入 · 1 个输出",
-      "globalcontext": "无流程端口 · 全局上下文变量",
-      "logger": "1 个输入 · 2 个输出",
-      "staircase": "1 个输入 · 1 个输出",
-      "garage": "1 个输入 · 1 个输出",
-      "scenecontroller": "1 个输入 · 1 个输出",
-      "loadcontrol": "1 个输入 · 1 个输出",
-      "hatranslator": "1 个输入 · 1 个输出 · 无需网关"
+      "globalcontext": "无流程端口 · 全局上下文变量"
     },
     "outputs": {
       "0": "每个报警设备一条消息",
@@ -47,10 +35,6 @@
       "2": "最近报警的设备"
     },
     "variable_name": "变量名称",
-    "variable_name_description": "仅限字母（A–Z、a–z）。此名称决定全局变量 <name>_READ 和 <name>_WRITE。",
-    "logger_outputs": {
-      "0": "ETS 诊断 XML",
-      "1": "报文计数"
-    }
+    "variable_name_description": "仅限字母（A–Z、a–z）。此名称决定全局变量 <name>_READ 和 <name>_WRITE。"
   }
 }

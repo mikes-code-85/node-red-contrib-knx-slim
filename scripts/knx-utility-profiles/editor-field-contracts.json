@@ -37,16 +37,6 @@
     "exposeAsVariable",
     "writeExecutionInterval"
   ],
-  "logger": [
-    "autoStartTimerCreateETSXML",
-    "autoStartTimerTelegramCounter",
-    "filePath",
-    "intervalCreateETSXML",
-    "intervalTelegramCount",
-    "maxRowsInETSXML",
-    "saveMode",
-    "topic"
-  ],
   "staircase": [
     "blockAction",
     "dptBlock",
