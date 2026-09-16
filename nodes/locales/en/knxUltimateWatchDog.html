@@ -1,4 +1,4 @@
-<script type="text/markdown" data-help-name="knxUltimateWatchDog">
+<script type="text/markdown" data-help-name="knxSlimWatchDog">
 **Deprecated:** This dedicated node remains supported for existing flows. Use **KNX Utility** for new flows and select the matching function. The legacy node is hidden from the palette and marked `(deprecated)` on the canvas. Its editor offers a button to convert all compatible legacy KNX utility nodes in every flow and subflow after confirmation. Conversion happens locally in the browser, preserves IDs, settings, connections and groups, and supports Undo. Confirming closes the current node editor and discards unsaved edits. Review the result before Deploy.
 
 <p>Checks the connection to the Gateway or to a specific KNX device</p>
@@ -15,9 +15,9 @@
 
 The WatchDog has two check levels.
 
-The first, checks only the connection between knx-Ultimate and the KNX/IP Interface.
+The first, checks only the connection between knx-Slim and the KNX/IP Interface.
 
-The second one, checks the entire route, from knx-Ultimate Gateway node to ethernet, then to KNX TP media and vice versa; this implies the use of a physical device, responding to a read requests.
+The second one, checks the entire route, from knx-Slim Gateway node to ethernet, then to KNX TP media and vice versa; this implies the use of a physical device, responding to a read requests.
 
 The WatchDog node is a powerfull node for signalling errors and connection problems. <br />
 
@@ -31,17 +31,17 @@ You can send an Email to the KNX installer responsible to your Building, or you 
 | Group Address to monitor | The node will send a telegram to this address and monitors the message flowing through the KNX BUS. The Datapoint must be DPT 1.x (boolean).|
 | Node Name | Node Name |
 | Auto start the watchdog timer | The watchdog timer starts automatically on deploy or on node-red start. |
-| Listen to KNX-Ultimate node errors | Enabled by default. Outputs a `NodeError` when a KNX-Ultimate node associated with the selected gateway, including KNX Device, reports a red error status. Disabling it suppresses only those `NodeError` messages; the WatchDog's own bus checks and control messages remain active. |
+| Listen to KNX-Slim node errors | Enabled by default. Outputs a `NodeError` when a KNX-Slim node associated with the selected gateway, including KNX Device, reports a red error status. Disabling it suppresses only those `NodeError` messages; the WatchDog's own bus checks and control messages remain active. |
 | Check level (please see the wiki) | See below |
 
-**Check level** > _**Ethernet**_: Checks the connection between knx-ultimate Gateway in unicast mode and your KNX IP Interface.<br />
+**Check level** > _**Ethernet**_: Checks the connection between knx-slim Gateway in unicast mode and your KNX IP Interface.<br />
 
 <img src="https://raw.githubusercontent.com/Supergiovane/node-red-contrib-knx-ultimate/master/img/wiki/WatchDogEthernetLevel.png"
  width="90%"><br />
 
 > _ **Ethernet and KNX TP** _ : Complete check. It works either with KNX/IP Routers and KNX/IP Interfaces (as well as
 
-address set), it checks the connection between KNX-Ultimate and this physical KNX device, by issuing a read request and by awaiting a response telegram from this device. Any error on the ethernet trunk or on the KNX Twisted Pair trunk will be notified. To setup this check level, you need to reserve a Group Address and add it to a "Status" output of your KNX Actuator. For example, if you have a light actuator, it has for sure a "light status" output that can **respond** to a **read request**.
+address set), it checks the connection between KNX-Slim and this physical KNX device, by issuing a read request and by awaiting a response telegram from this device. Any error on the ethernet trunk or on the KNX Twisted Pair trunk will be notified. To setup this check level, you need to reserve a Group Address and add it to a "Status" output of your KNX Actuator. For example, if you have a light actuator, it has for sure a "light status" output that can **respond** to a **read request**.
 
 About this picture, in ETS, assign an Output of this Gira KNX Actuator to a Light **Status** (for example 12/0/0). Everytime the Watchdog node asks for the status, the Gira KNX Actuator will respond. The WatchDog then know, that your KNX
 
@@ -59,7 +59,7 @@ Twisted Pair connection is up and running.
 
 # MESSAGE OUTPUT FROM THE WATCHDOG
 
-The WatchDog always outputs its own bus-check and control messages. When **Listen to KNX-Ultimate node errors** is enabled, it also outputs errors reported by KNX-Ultimate nodes, including KNX Device, associated with the selected gateway.<br />
+The WatchDog always outputs its own bus-check and control messages. When **Listen to KNX-Slim node errors** is enabled, it also outputs errors reported by KNX-Slim nodes, including KNX Device, associated with the selected gateway.<br />
 
 **In case of Watchdog self connection problem**
 
@@ -80,19 +80,19 @@ description: // (whatever error description)
 
 <br />
 
-**When KNX-Ultimate node error listening is enabled and one of your nodes is in trouble**
+**When KNX-Slim node error listening is enabled and one of your nodes is in trouble**
 
 ```javascript
 
 msg = {
 type:"NodeError"
-checkPerformed: "Self KNX-Ultimate node reporting a red color status"
+checkPerformed: "Self KNX-Slim node reporting a red color status"
 nodeid: "23HJ.2355" // (The node ID causing the error, so you can find it using node-red "search" funtion)
 payload: true
-description: // (KNX-Ultimate node reports his error here)
+description: // (KNX-Slim node reports his error here)
 completeError:{
 nodeid: "23HJ.2355" // (The node ID causing the error, so you can find it using node-red "search" funtion)
-topic: "0/1/1" // (or the custom topic you set in the knx-ultimate node)
+topic: "0/1/1" // (or the custom topic you set in the knx-slim node)
 devicename: "Kitchen Light"
 GA: "0/1/1"
 

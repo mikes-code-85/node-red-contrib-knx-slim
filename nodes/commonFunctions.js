@@ -66,7 +66,7 @@ module.exports = (RED) => {
     // }
 
     // Endpoint for reading csv/esf by the other nodes
-    RED.httpAdmin.get('/knxUltimatecsv', RED.auth.needsPermission('knxUltimate-config.read'), (req, res) => {
+    RED.httpAdmin.get('/knxSlimcsv', RED.auth.needsPermission('knxSlim-config.read'), (req, res) => {
       try {
         if (typeof req.query.nodeID !== 'undefined' && req.query.nodeID !== null && req.query.nodeID !== '') {
           const _node = RED.nodes.getNode(req.query.nodeID) // Retrieve node.id of the config node.
@@ -74,9 +74,9 @@ module.exports = (RED) => {
         } else {
           // Get the first knxultimate-config having a valid csv
           try {
-            if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.info('KNXUltimate-config: Requested csv maybe from visu-ultimate?')
+            if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.info('KNXSlim-config: Requested csv maybe from visu-ultimate?')
             RED.nodes.eachNode((_node) => {
-              if (_node.hasOwnProperty('csv') && _node.type === 'knxUltimate-config' && _node.csv !== '') {
+              if (_node.hasOwnProperty('csv') && _node.type === 'knxSlim-config' && _node.csv !== '') {
                 res.json(RED.nodes.getNode(_node.id).csv)
               }
             })
@@ -87,7 +87,7 @@ module.exports = (RED) => {
     })
 
     // 14/08/2019 Endpoint for retrieving the ethernet interfaces
-    RED.httpAdmin.get('/knxUltimateETHInterfaces', (req, res) => {
+    RED.httpAdmin.get('/knxSlimETHInterfaces', (req, res) => {
       const jListInterfaces = []
       try {
         const oiFaces = oOS.networkInterfaces()
@@ -112,18 +112,18 @@ module.exports = (RED) => {
       res.json(jListInterfaces)
     })
 
-    RED.httpAdmin.get('/knxUltimateSerialInterfaces', RED.auth.needsPermission('knxUltimate-config.read'), async (req, res) => {
+    RED.httpAdmin.get('/knxSlimSerialInterfaces', RED.auth.needsPermission('knxSlim-config.read'), async (req, res) => {
       try {
         const list = await KNXClient.listSerialInterfaces()
         res.json(Array.isArray(list) ? list : [])
       } catch (error) {
-        try { RED.log.error(`KNXUltimate serial discovery failed: ${error.message}`) } catch (e) { }
+        try { RED.log.error(`KNXSlim serial discovery failed: ${error.message}`) } catch (e) { }
         res.json([])
       }
     })
 
     // Discover KNX/IP gateways on demand and return cached results
-    RED.httpAdmin.get('/knxUltimateDiscoverKNXGateways', RED.auth.needsPermission('knxUltimate-config.read'), async function (req, res) {
+    RED.httpAdmin.get('/knxSlimDiscoverKNXGateways', RED.auth.needsPermission('knxSlim-config.read'), async function (req, res) {
       try {
         const utils = require('./utils/utils')
         // Always trigger discovery on request to ensure fresh data
@@ -136,7 +136,7 @@ module.exports = (RED) => {
     })
 
     // 12/08/2021 Endpoint for deleting the GA persistent file for the current gateway
-    RED.httpAdmin.get('/deletePersistGAFile', RED.auth.needsPermission('knxUltimate-config.read'), (req, res) => {
+    RED.httpAdmin.get('/deletePersistGAFile', RED.auth.needsPermission('knxSlim-config.read'), (req, res) => {
       try {
         if (typeof req.query.serverId !== 'undefined' && req.query.serverId !== null && req.query.serverId !== '') {
           try {
@@ -153,7 +153,7 @@ module.exports = (RED) => {
     })
 
     // 2025-09 List interfaces (IA) from KNX Secure keyring
-    RED.httpAdmin.get('/knxUltimateKeyringInterfaces', RED.auth.needsPermission('knxUltimate-config.read'), async (req, res) => {
+    RED.httpAdmin.get('/knxSlimKeyringInterfaces', RED.auth.needsPermission('knxSlim-config.read'), async (req, res) => {
       try {
         let keyringContent = (req.query.keyring || '').toString()
         let password = (req.query.pwd || '').toString()
@@ -172,14 +172,14 @@ module.exports = (RED) => {
         try {
           ({ Keyring } = require('knxultimate/build/secure/keyring'))
         } catch (e) {
-          try { RED.log.error(`KNXUltimate: cannot load Keyring module: ${e.message}`) } catch (err) { }
+          try { RED.log.error(`KNXSlim: cannot load Keyring module: ${e.message}`) } catch (err) { }
           return res.json([])
         }
         const kr = new Keyring()
         try {
           await kr.load(keyringContent, password)
         } catch (e) {
-          try { RED.log.error(`KNXUltimate: keyring load error: ${e.message}`) } catch (err) { }
+          try { RED.log.error(`KNXSlim: keyring load error: ${e.message}`) } catch (err) { }
           return res.json([])
         }
         const out = []
@@ -190,14 +190,14 @@ module.exports = (RED) => {
         } catch (e) { }
         res.json(out)
       } catch (error) {
-        try { RED.log.error(`KNXUltimate: knxUltimateKeyringInterfaces error: ${error.message}`) } catch (e) { }
+        try { RED.log.error(`KNXSlim: knxSlimKeyringInterfaces error: ${error.message}`) } catch (e) { }
         res.json([])
       }
     })
 
     // 2026-06 Reveal all keyring passwords (and the general keyring password) in clear text.
     // Used by the "Utility" tab button, enabled only when KNX Secure is selected.
-    RED.httpAdmin.get('/knxUltimateKeyringDump', RED.auth.needsPermission('knxUltimate-config.read'), async (req, res) => {
+    RED.httpAdmin.get('/knxSlimKeyringDump', RED.auth.needsPermission('knxSlim-config.read'), async (req, res) => {
       try {
         let keyringContent = (req.query.keyring || '').toString()
         let password = (req.query.pwd || '').toString()
@@ -218,14 +218,14 @@ module.exports = (RED) => {
         try {
           ({ Keyring } = require('knxultimate/build/secure/keyring'))
         } catch (e) {
-          try { RED.log.error(`KNXUltimate: cannot load Keyring module: ${e.message}`) } catch (err) { }
+          try { RED.log.error(`KNXSlim: cannot load Keyring module: ${e.message}`) } catch (err) { }
           return res.json({ ok: false, error: 'KEYRING_MODULE_UNAVAILABLE' })
         }
         const kr = new Keyring()
         try {
           await kr.load(keyringContent, password)
         } catch (e) {
-          try { RED.log.error(`KNXUltimate: keyring load error: ${e.message}`) } catch (err) { }
+          try { RED.log.error(`KNXSlim: keyring load error: ${e.message}`) } catch (err) { }
           return res.json({ ok: false, error: 'KEYRING_LOAD_FAILED' })
         }
 
@@ -305,13 +305,13 @@ module.exports = (RED) => {
 
         res.json({ ok: true, dump: lines.join('\n') })
       } catch (error) {
-        try { RED.log.error(`KNXUltimate: knxUltimateKeyringDump error: ${error.message}`) } catch (e) { }
+        try { RED.log.error(`KNXSlim: knxSlimKeyringDump error: ${error.message}`) } catch (e) { }
         res.json({ ok: false, error: 'UNEXPECTED_ERROR' })
       }
     })
 
     // 2025-09 Secure: return list of Data Secure Group Addresses from keyring
-    RED.httpAdmin.get('/knxUltimateKeyringDataSecureGAs', RED.auth.needsPermission('knxUltimate-config.read'), async (req, res) => {
+    RED.httpAdmin.get('/knxSlimKeyringDataSecureGAs', RED.auth.needsPermission('knxSlim-config.read'), async (req, res) => {
       try {
         let keyringContent = (req.query.keyring || '').toString()
         let password = (req.query.pwd || '').toString()
@@ -336,12 +336,12 @@ module.exports = (RED) => {
         } catch (e) { }
         res.json(out)
       } catch (error) {
-        try { RED.log.error(`KNXUltimate: knxUltimateKeyringDataSecureGAs error: ${error.message}`) } catch (e) { }
+        try { RED.log.error(`KNXSlim: knxSlimKeyringDataSecureGAs error: ${error.message}`) } catch (e) { }
         res.json([])
       }
     })
 
-    RED.httpAdmin.get('/knxUltimateDpts', (req, res) => {
+    RED.httpAdmin.get('/knxSlimDpts', (req, res) => {
       try {
         const dpts = Object.entries(dptlib.dpts).filter(onlyDptKeys).map(extractBaseNo).sort(sortBy('base'))
           .reduce(toConcattedSubtypes, [])
@@ -350,7 +350,7 @@ module.exports = (RED) => {
     })
 
     // 15/09/2020 Supergiovane, read datapoint help usage
-    RED.httpAdmin.get('/knxUltimateDptsGetHelp', (req, res) => {
+    RED.httpAdmin.get('/knxSlimDptsGetHelp', (req, res) => {
       try {
         const serverId = RED.nodes.getNode(req.query.serverId) // Retrieve node.id of the config node.
         const sDPT = req.query.dpt.split('.')[0] // Takes only the main type
@@ -358,8 +358,8 @@ module.exports = (RED) => {
         if (sDPT === '0') {
           // Special fake datapoint, meaning "Universal Mode"
           jRet = {
-            help: `// KNX-Ultimate set as UNIVERSAL NODE
-    // Example of a function that sends a message to the KNX-Ultimate
+            help: `// KNX-Slim set as UNIVERSAL NODE
+    // Example of a function that sends a message to the KNX-Slim
     msg.destination = "0/0/1"; // Set the destination 
     msg.payload = false; // issues a write or response (based on the options Telegram type above) to the KNX bus
     msg.event = "GroupValue_Write"; // "GroupValue_Write" or "GroupValue_Response", overrides the option Telegram type above.

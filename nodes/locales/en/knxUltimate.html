@@ -1,4 +1,4 @@
-<script type="text/markdown" data-help-name="knxUltimate">
+<script type="text/markdown" data-help-name="knxSlim">
 ## KNX-ULTIMATE DEVICE NODE SETTINGS
 
 <p>This node lets you control a KNX Group Address, this is the most used node.  
@@ -168,7 +168,7 @@ if (msg.payload === false && otherGA === false){
 
 ### Details
 
-`msg.setConfig`: It's possible to programmatically change the KNX-Ultimate node configuration, by sending msg.setConfig object to the node.
+`msg.setConfig`: It's possible to programmatically change the KNX-Slim node configuration, by sending msg.setConfig object to the node.
 The new configuration will be retained until next msg.setConfig or until restart/redeploy.
 All properties (_setGroupAddress_ and _setDPT_) **are mandatory** ..\
 Use it like that, in a functon node:
@@ -273,7 +273,7 @@ msg = {
 
 ### Details
 
-`msg.setConfig`: It's possible to programmatically change the KNX-Ultimate node configuration, by sending msg.setConfig object to the node.
+`msg.setConfig`: It's possible to programmatically change the KNX-Slim node configuration, by sending msg.setConfig object to the node.
 The new configuration will be retained until next msg.setConfig or until restart/redeploy.
 All properties (_setGroupAddress_ and _setDPT_) **are mandatory** ..\
 Use it like that, in a functon node:
@@ -403,7 +403,7 @@ Here you'll find a sample of [Virtual Device](https://supergiovane.github.io/nod
 
 The node accepts msg from the flow to be sent out to KNX bus and send out msg to the flow as soon KNX message arrive from the bus.<br/>
 Supposing you provided a Group Address and a Datapoint to the node, either manually or with auto populating fields by selecting your device from the device's list after you've importet the ETS file.<br/>
-You can also override one or more parameters set in the KNX-Ultimate config window.<br/>
+You can also override one or more parameters set in the KNX-Slim config window.<br/>
 All properties below are optional, except for the payload.<br/>
 
 **msg.destination** <br/>
@@ -415,7 +415,7 @@ For example, true/false/21/"Hello". Set the payload you want to send to the KNX 
 **msg.event** <br/>
 "GroupValue\_Write": writes the telegram to the KNX BUS.<br/>
 "GroupValue\_Response": sends a response telegram to the KNX BUS.<br/>
-"Update\_NoWrite": sends nothings to the KNX BUS, just updates the internal value of the KNX-Ultimate node. This is useful if you wanna only store the value into the node and read it later with a read request.<br/>
+"Update\_NoWrite": sends nothings to the KNX BUS, just updates the internal value of the KNX-Slim node. This is useful if you wanna only store the value into the node and read it later with a read request.<br/>
 CAUTION: in case of _msg.event = "Update\_NoWrite"_ all nodes with the same group address will emit to the flow a msg like this:
 
 ```javascript
@@ -448,7 +448,7 @@ Writes RAW data to the KNX BUS. Please see below an example.<br/>
 
 ## PROGRAMMATICALLY CHANGE THE NODE CONFIGURATION VIA MSG
 
-It's possible to programmatically change the KNX-Ultimate node configuration, by sending msg.setConfig object to the node.<br/>
+It's possible to programmatically change the KNX-Slim node configuration, by sending msg.setConfig object to the node.<br/>
 [Please see here the sample page.](https://supergiovane.github.io/node-red-contrib-knx-ultimate/wiki/-Sample-setConfig)
 
 <br/>
@@ -463,7 +463,7 @@ You can more samples [here](https://supergiovane.github.io/node-red-contrib-knx-
 
 ```javascript
 
-// Example of a function that sends a message to the KNX-Ultimate
+// Example of a function that sends a message to the KNX-Slim
 msg.payload = true; // issues a write or response (based on the options <b>Telegram type</b> above) to the KNX bus
 return msg;
 
@@ -473,7 +473,7 @@ return msg;
 
 ```javascript
 
-// Example of a function that sends a message to the KNX-Ultimate
+// Example of a function that sends a message to the KNX-Slim
 msg.payload = 30; // issues a write or response (based on the options <b>Telegram type</b> above) to the KNX bus
 return msg;
 
@@ -483,7 +483,7 @@ return msg;
 
 ```javascript
 
-// Example of a function that sends a message to the KNX-Ultimate
+// Example of a function that sends a message to the KNX-Slim
 msg.payload = "Output Tem. 35°C"; // issues a write or response (based on the options <b>Telegram type</b> above) to the KNX bus
 return msg;
 
@@ -493,7 +493,7 @@ return msg;
 
 ```javascript
 
-// Example of a function that sends a read status message to the KNX-Ultimate
+// Example of a function that sends a read status message to the KNX-Slim
 // Issues a read request to the KNX bus. You'll expect a 'response' from the bus. You need to select the **React to response telegrams** option.
 // The node will react to the KNX Response telegram coming from the BUS.
 msg.readstatus = true; // issues a write or response (based on the options <b>Telegram type</b> above) to the KNX bus
@@ -505,7 +505,7 @@ return msg;
 
 To send a RAW buffer value to the KNX bus, use the _ **writeraw ** _ and _**bitlength** _ properties of the msg input.<br/>
 In this case, the _Datapoint_ you set in the property window will be ignored.<br/>
-Slap a function node in front of knx-ultimate and paste his code:
+Slap a function node in front of knx-slim and paste his code:
 
 ```javascript
 
@@ -544,7 +544,7 @@ If you do not import the ETS csv, you need to pass the datapoint type to the nod
 
 ```javascript
 
-// Example of a function that sends a message to the KNX-Ultimate
+// Example of a function that sends a message to the KNX-Slim
 msg.event = "GroupValue_Write";
 msg.destination = "0/0/1"; // Set the destination 
 msg.payload = false; // issues a write or response (based on the options <b>Telegram type</b> above) to the KNX bus
@@ -556,7 +556,7 @@ return msg;
 
 ```javascript
 
-// Example of a function that sends a message to the KNX-Ultimate
+// Example of a function that sends a message to the KNX-Slim
 msg.event = "GroupValue_Write";
 msg.destination = "0/0/1"; // Set the destination 
 msg.dpt = "1.001"; 
@@ -570,7 +570,7 @@ You cannot issue a read request to all groups if you doesn't import your ETS fil
 
 ```javascript
 
-// Example of a function that sends a read status message to the KNX-Ultimate
+// Example of a function that sends a read status message to the KNX-Slim
 // Issues a read request to the KNX bus. You'll expect a 'response' from the bus. You need to select the **React to response telegrams** option.
 // The node will react to the KNX Response telegram coming from the BUS.
 msg.readstatus = true; // issues a write or response (based on the options <b>Telegram type</b> above) to the KNX bus

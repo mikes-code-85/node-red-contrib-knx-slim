@@ -8,7 +8,7 @@
   },
   {
     "id": "gc_cfg",
-    "type": "knxUltimate-config",
+    "type": "knxSlim-config",
     "z": "",
     "host": "224.0.23.12",
     "port": "3671",
@@ -31,7 +31,7 @@
   },
   {
     "id": "gc_node",
-    "type": "knxUltimateGlobalContext",
+    "type": "knxSlimGlobalContext",
     "z": "gc_tab",
     "server": "gc_cfg",
     "name": "KNXGlobalContext",

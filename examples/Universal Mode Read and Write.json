@@ -1,6 +1,6 @@
 [{
   "id": "um_cfg_1",
-  "type": "knxUltimate-config",
+  "type": "knxSlim-config",
   "z": "",
   "host": "224.0.23.12",
   "port": "3671",
@@ -13,7 +13,7 @@
 },
 {
   "id": "um_node_all",
-  "type": "knxUltimate",
+  "type": "knxSlim",
   "z": "flow2",
   "server": "um_cfg_1",
   "topic": "0/0/0",

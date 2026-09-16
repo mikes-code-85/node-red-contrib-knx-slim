@@ -10,7 +10,7 @@ const dns = require('dns/promises')
 const os = require('os')
 const _ = require('lodash')
 const knx = require('knxultimate')
-// 2025-09: Use KNXUltimate built-in keyring for KNX Secure validation
+// 2025-09: Use KNXSlim built-in keyring for KNX Secure validation
 let Keyring
 try {
   // Not exported by default; import from build path
@@ -26,7 +26,7 @@ const payloadRounder = require('./utils/payloadManipulation')
 const utils = require('./utils/utils')
 const dispatchWatchDogNodeError = require('./utils/watchDogErrorDispatcher')
 
-// Versions logged once at startup (node package + KNXUltimate engine)
+// Versions logged once at startup (node package + KNXSlim engine)
 let NODE_VERSION = 'unknown'
 try { NODE_VERSION = require('../package.json').version } catch (e) { /* empty */ }
 let KNX_ENGINE_VERSION = 'unknown'
@@ -198,12 +198,12 @@ const resolveHostAddress = async (hostname, lookup = dns.lookup) => {
 }
 
 module.exports = (RED) => {
-  // Log node and KNXUltimate engine versions once, at Node-RED startup.
+  // Log node and KNXSlim engine versions once, at Node-RED startup.
   try {
-    RED.log.info(`KNXUltimate: node-red-contrib-knx-ultimate v${NODE_VERSION} (KNXUltimate engine v${KNX_ENGINE_VERSION})`)
+    RED.log.info(`KNXSlim: node-red-contrib-knx-slim v${NODE_VERSION} (KNXSlim engine v${KNX_ENGINE_VERSION})`)
   } catch (e) { /* empty */ }
 
-  function knxUltimateConfigNode (config) {
+  function knxSlimConfigNode (config) {
     RED.nodes.createNode(this, config)
     const node = this
     node.host = config.host
@@ -466,9 +466,9 @@ module.exports = (RED) => {
     node.tunnelUserPassword = typeof config.tunnelUserPassword === 'undefined' ? '' : config.tunnelUserPassword
     node.tunnelUserId = typeof config.tunnelUserId === 'undefined' ? '' : config.tunnelUserId
     node.name = config.name === undefined || config.name === '' ? node.host : config.name // 12/08/2021
-    node.timerKNXUltimateCheckState = null // 08/10/2021 Check the state. If not connected and autoreconnect is true, retrig the connetion attempt.
+    node.timerKNXSlimCheckState = null // 08/10/2021 Check the state. If not connected and autoreconnect is true, retrig the connetion attempt.
     node.knxConnectionProperties = null // Retains the connection properties
-    node.allowLauch_initKNXConnection = true // See the node.timerKNXUltimateCheckState function
+    node.allowLauch_initKNXConnection = true // See the node.timerKNXSlimCheckState function
     // Serial FT1.2 configuration
     const sanitizeSerialPath = (value) => {
       if (typeof value !== 'string') return ''
@@ -831,8 +831,8 @@ module.exports = (RED) => {
 
     // ************************
 
-    // 16/02/2020 KNX-Ultimate nodes calls this function, then this funcion calls the same function on the Watchdog
-    node.reportToWatchdogCalledByKNXUltimateNode = (_oError) => {
+    // 16/02/2020 KNX-Slim nodes calls this function, then this funcion calls the same function on the Watchdog
+    node.reportToWatchdogCalledByKNXSlimNode = (_oError) => {
       // _oError is = { nodeid: node.id, topic: node.outputtopic, devicename: devicename, GA: GA, text: text };
       dispatchWatchDogNodeError(node, _oError)
     }
@@ -881,7 +881,7 @@ module.exports = (RED) => {
     }
 
     function getUniversalNodeAcceptedGAs (_oNode) {
-      const raw = _oNode?.knxUltimateAcceptedGAs
+      const raw = _oNode?.knxSlimAcceptedGAs
       if (raw === undefined || raw === null) return null
       const values = raw instanceof Set ? Array.from(raw) : Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[,\s;]+/) : []
       return values.map((ga) => String(ga || '').trim()).filter((ga) => ga !== '')
@@ -1266,7 +1266,7 @@ module.exports = (RED) => {
         return
       }
 
-      // 12/08/2021 Avoid start connection if there are no knx-ultimate nodes linked to this gateway
+      // 12/08/2021 Avoid start connection if there are no knx-slim nodes linked to this gateway
       // At start, initKNXConnection is already called only if the gateway has clients, but in the successive calls from the error handler, this check is not done.
       if (node.nodeClients.length === 0) {
         try {
@@ -1379,7 +1379,7 @@ module.exports = (RED) => {
       } catch (error) {
         if (node.sysLogger !== null) {
           node.sysLogger.error('Error in instantiating knxConnection ' + error.stack + ' Node ' + node.name)
-          node.error('KNXUltimate-config: Error in instantiating knxConnection ' + error.message + ' Node ' + node.name)
+          node.error('KNXSlim-config: Error in instantiating knxConnection ' + error.message + ' Node ' + node.name)
         }
         node.linkStatus = 'disconnected'
         // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
@@ -1513,7 +1513,7 @@ module.exports = (RED) => {
                   _input.handleSend(msg)
                 } else
                 // 21/10/2024 check wether is a HUE device
-                if (_input.type.includes('knxUltimateHue')) {
+                if (_input.type.includes('knxSlimHue')) {
                   const msg = {
                     knx: {
                       event: _evt,
@@ -2378,7 +2378,7 @@ module.exports = (RED) => {
         const fileGA = sTemp.split('\n')
         // Controllo se le righe dei gruppi contengono il separatore di tabulazione
         if (fileGA[0].search('\t') == -1) {
-          node.error('KNXUltimate-config: ERROR: the csv ETS file must have the tabulation as separator')
+          node.error('KNXSlim-config: ERROR: the csv ETS file must have the tabulation as separator')
           return
         }
 
@@ -2411,14 +2411,14 @@ module.exports = (RED) => {
                 if (element.split('\t')[5] == '') {
                   if (node.stopETSImportIfNoDatapoint === 'stop') {
                     node.error(
-                      'KNXUltimate-config: ABORT IMPORT OF ETS CSV FILE. To skip the invalid datapoint and continue import, change the related setting, located in the config node in the ETS import section.'
+                      'KNXSlim-config: ABORT IMPORT OF ETS CSV FILE. To skip the invalid datapoint and continue import, change the related setting, located in the config node in the ETS import section.'
                     )
                     return
                   }
                   if (node.stopETSImportIfNoDatapoint === 'fake') {
                     // 02/03/2020 Whould you like to continue without datapoint? Good. Here a totally fake datapoint
                     node.warn(
-                      'KNXUltimate-config: WARNING IMPORT OF ETS CSV FILE. Datapoint not set. You choosed to continue import with a fake datapoint 1.001. -> ' +
+                      'KNXSlim-config: WARNING IMPORT OF ETS CSV FILE. Datapoint not set. You choosed to continue import with a fake datapoint 1.001. -> ' +
                       element.split('\t')[0] +
                       ' ' +
                       element.split('\t')[1]
@@ -2431,7 +2431,7 @@ module.exports = (RED) => {
                   } else {
                     // 31/03/2020 Skip import
                     node.warn(
-                      'KNXUltimate-config: WARNING IMPORT OF ETS CSV FILE. Datapoint not set. You choosed to skip -> ' +
+                      'KNXSlim-config: WARNING IMPORT OF ETS CSV FILE. Datapoint not set. You choosed to skip -> ' +
                       element.split('\t')[0] +
                       ' ' +
                       element.split('\t')[1]
@@ -2442,7 +2442,7 @@ module.exports = (RED) => {
                   let DPTb = element.split('\t')[5].split('-')[2]
                   if (typeof DPTb === 'undefined') {
                     node.warn(
-                      "KNXUltimate-config: WARNING: Datapoint not fully set (there is only the main type). I applied a default .001, but please check if i'ts ok ->" +
+                      "KNXSlim-config: WARNING: Datapoint not fully set (there is only the main type). I applied a default .001, but please check if i'ts ok ->" +
                       element.split('\t')[0] +
                       ' ' +
                       element.split('\t')[1] +
@@ -2543,20 +2543,20 @@ module.exports = (RED) => {
             if (sDPT === '') {
               if (node.stopETSImportIfNoDatapoint === 'stop') {
                 node.error(
-                  'KNXUltimate-config: ABORT IMPORT OF ETS ESF FILE. To continue import, change the related setting, located in the config node in the ETS import section.'
+                  'KNXSlim-config: ABORT IMPORT OF ETS ESF FILE. To continue import, change the related setting, located in the config node in the ETS import section.'
                 )
                 return
               } if (node.stopETSImportIfNoDatapoint === 'fake') {
                 sDPT = '5.004' // Maybe.
                 node.error(
-                  'KNXUltimate-config: ERROR: Found an UNCERTAIN datapoint in ESF ETS. You choosed to fake the datapoint -> ' +
+                  'KNXSlim-config: ERROR: Found an UNCERTAIN datapoint in ESF ETS. You choosed to fake the datapoint -> ' +
                   sGA +
                   '. An fake datapoint has been set: ' +
                   sDPT
                 )
               } else {
                 sDPT = 'SKIP'
-                node.error('KNXUltimate-config: ERROR: Found an UNCERTAIN datapoint in ESF ETS. You choosed to skip -> ' + sGA)
+                node.error('KNXSlim-config: ERROR: Found an UNCERTAIN datapoint in ESF ETS. You choosed to skip -> ' + sGA)
               }
             }
             if (sDPT !== 'SKIP') ajsonOutput.push({
@@ -2606,8 +2606,8 @@ module.exports = (RED) => {
 
     // 08/10/2021 Every xx seconds, i check if the connection is up and running
     node.sysLogger?.info('Autoconnection: ' + (node.autoReconnect === false ? 'no.' : 'yes') + ' Node ' + node.name)
-    if (node.timerKNXUltimateCheckState !== null) clearInterval(node.timerKNXUltimateCheckState)
-    node.timerKNXUltimateCheckState = setInterval(async () => {
+    if (node.timerKNXSlimCheckState !== null) clearInterval(node.timerKNXSlimCheckState)
+    node.timerKNXSlimCheckState = setInterval(async () => {
       // If the node is disconnected, wait another cycle, then reconnects
       if (node.allowLauch_initKNXConnection && node.autoReconnect) {
         node.allowLauch_initKNXConnection = false
@@ -2616,7 +2616,7 @@ module.exports = (RED) => {
           node.setAllClientsStatus('Auto reconnect in progress...', 'grey', '')
         }, 100)
         node.sysLogger?.debug(
-          'Auto Reconect by timerKNXUltimateCheckState in progress. node.LinkStatus: ' +
+          'Auto Reconect by timerKNXSlimCheckState in progress. node.LinkStatus: ' +
           node.linkStatus +
           ', node.autoReconnect:' +
           node.autoReconnect
@@ -2708,9 +2708,9 @@ module.exports = (RED) => {
 
     node.on('close', async function (done) {
       try {
-        if (node.timerKNXUltimateCheckState !== null) {
-          clearInterval(node.timerKNXUltimateCheckState)
-          node.timerKNXUltimateCheckState = null
+        if (node.timerKNXSlimCheckState !== null) {
+          clearInterval(node.timerKNXSlimCheckState)
+          node.timerKNXSlimCheckState = null
         }
         await node.Disconnect()
       } catch (error) { /* empty */ }
@@ -2723,8 +2723,8 @@ module.exports = (RED) => {
     })
   }
 
-  // RED.nodes.registerType("knxUltimate-config", knxUltimateConfigNode);
-  RED.nodes.registerType('knxUltimate-config', knxUltimateConfigNode, {
+  // RED.nodes.registerType("knxSlim-config", knxSlimConfigNode);
+  RED.nodes.registerType('knxSlim-config', knxSlimConfigNode, {
     credentials: {
       keyringFilePassword: { type: 'password' }
     }

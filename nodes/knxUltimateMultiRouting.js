@@ -1,4 +1,4 @@
-// KNX Multi Routing - interconnect multiple KNX Ultimate gateways via Node-RED flows
+// KNX Multi Routing - interconnect multiple KNX Slim gateways via Node-RED flows
 const loggerClass = require('./utils/sysLogger')
 const os = require('os')
 
@@ -68,7 +68,7 @@ const getKnxultimate = () => {
 }
 
 module.exports = function (RED) {
-  function knxUltimateMultiRouting (config) {
+  function knxSlimMultiRouting (config) {
     RED.nodes.createNode(this, config)
     const node = this
 
@@ -160,14 +160,14 @@ module.exports = function (RED) {
       return ids
     }
 
-    // Called by knxUltimate-config.js to deliver bus telegrams (raw APDU + addresses)
+    // Called by knxSlim-config.js to deliver bus telegrams (raw APDU + addresses)
     node.handleSend = (msg) => {
       try {
         const processed = applyRoutingCounterOnOutboundMsg(msg)
         if (!processed) return
         node.send(processed)
       } catch (error) {
-        node.sysLogger?.error(`knxUltimateMultiRouting: output error: ${error.message}`)
+        node.sysLogger?.error(`knxSlimMultiRouting: output error: ${error.message}`)
       }
     }
 
@@ -451,7 +451,7 @@ module.exports = function (RED) {
           if (!processed) return
           node.send(processed)
         } catch (error) {
-          node.sysLogger?.error(`knxUltimateMultiRouting: tunnel rawTelegram output error: ${error.message}`)
+          node.sysLogger?.error(`knxSlimMultiRouting: tunnel rawTelegram output error: ${error.message}`)
         }
       })
 
@@ -538,5 +538,5 @@ module.exports = function (RED) {
     if (node.mode !== 'server') updateStatus({ fill: 'grey', shape: 'dot', text: 'Routing ready' })
   }
 
-  RED.nodes.registerType('knxUltimateMultiRouting', knxUltimateMultiRouting)
+  RED.nodes.registerType('knxSlimMultiRouting', knxSlimMultiRouting)
 }

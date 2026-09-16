@@ -3,8 +3,8 @@
 const registeredRuntimes = new WeakMap()
 
 module.exports = function registerSendNowEndpoint (RED, kind = 'legacy') {
-  const route = kind === 'utility' ? '/knxUltimateUtility/sendNow' : '/knxUltimateDateTime/sendNow'
-  const permission = kind === 'utility' ? 'knxUltimateUtility.write' : 'knxUltimate-config.write'
+  const route = kind === 'utility' ? '/knxSlimUtility/sendNow' : '/knxSlimDateTime/sendNow'
+  const permission = kind === 'utility' ? 'knxSlimUtility.write' : 'knxSlim-config.write'
   let registeredRoutes = registeredRuntimes.get(RED)
   if (!registeredRoutes) {
     registeredRoutes = new Set()

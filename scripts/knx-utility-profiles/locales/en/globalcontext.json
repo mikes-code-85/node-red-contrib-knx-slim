@@ -1,5 +1,5 @@
 {
-  "knxUltimateGlobalContext": {
+  "knxSlimGlobalContext": {
     "paletteLabel": "KNX Global Context",
     "title": "KNX Global Context",
     "node-input-name": "Variable Name (no spaces, only chars [a-z])",

@@ -1,6 +1,6 @@
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/flowMigrationBackup.js"></script>
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/knxUtilityMigration.js"></script>
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/htmlUtils.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/flowMigrationBackup.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/knxUtilityMigration.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/htmlUtils.js"></script>
 
 <script type="text/javascript">
   const KNX_ULTIMATE_DATETIME_KEYWORDS = {
@@ -56,22 +56,22 @@
     return 0
   }
 
-  const knxGetKnxUltimateConfigs = () => {
+  const knxGetKnxSlimConfigs = () => {
     const configs = []
     try {
       if (RED && RED.nodes) {
         if (typeof RED.nodes.eachConfig === 'function') {
           RED.nodes.eachConfig((cfg) => {
-            if (cfg && cfg.type === 'knxUltimate-config') configs.push(cfg)
+            if (cfg && cfg.type === 'knxSlim-config') configs.push(cfg)
           })
         } else if (typeof RED.nodes.eachNode === 'function') {
           RED.nodes.eachNode((n) => {
-            if (n && n.type === 'knxUltimate-config') configs.push(n)
+            if (n && n.type === 'knxSlim-config') configs.push(n)
           })
         }
         if (configs.length === 0 && typeof RED.nodes.filterNodes === 'function') {
           try {
-            const filtered = RED.nodes.filterNodes({ type: 'knxUltimate-config' })
+            const filtered = RED.nodes.filterNodes({ type: 'knxSlim-config' })
             if (Array.isArray(filtered)) filtered.forEach((n) => configs.push(n))
           } catch (error) { /* ignore */ }
         }
@@ -83,7 +83,7 @@
   const knxFetchGroupAddresses = (serverId) => {
     return new Promise((resolve) => {
       if (!serverId) return resolve([])
-      $.getJSON(`knxUltimatecsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
+      $.getJSON(`knxSlimcsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
         resolve(Array.isArray(data) ? data : [])
       }).fail(() => resolve([]))
     })
@@ -173,8 +173,8 @@
         }
       }
 
-      // Otherwise, select the first knxUltimate-config that has an ETS CSV imported (non-empty parsed GA list).
-      const configs = knxGetKnxUltimateConfigs()
+      // Otherwise, select the first knxSlim-config that has an ETS CSV imported (non-empty parsed GA list).
+      const configs = knxGetKnxSlimConfigs()
       if (configs.length === 0) return
 
       // Fast path: config node already carries an ETS file/path in its `csv` property.
@@ -208,7 +208,7 @@
       const suggestions = knxSuggestFromCsv(selected.rows)
       return knxApplySuggestions(node, selected.id, suggestions, { updateDom })
     } catch (error) {
-      try { console.warn('knxUltimateDateTime auto-config failed', error) } catch (e) { /* ignore */ }
+      try { console.warn('knxSlimDateTime auto-config failed', error) } catch (e) { /* ignore */ }
     }
   }
 
@@ -220,7 +220,7 @@
       const suggestions = knxSuggestFromCsv(rows)
       return knxApplySuggestions(node, serverId, suggestions, { updateDom, overwrite })
     } catch (error) {
-      try { console.warn('knxUltimateDateTime auto-config for server failed', error) } catch (e) { /* ignore */ }
+      try { console.warn('knxSlimDateTime auto-config for server failed', error) } catch (e) { /* ignore */ }
     }
   }
 
@@ -267,11 +267,11 @@
     }
   }
 
-  RED.nodes.registerType('knxUltimateDateTime', {
+  RED.nodes.registerType('knxSlimDateTime', {
     category: 'deprecated',
     color: '#E5F0E2',
     defaults: {
-      server: { type: 'knxUltimate-config', required: true },
+      server: { type: 'knxSlim-config', required: true },
       name: { value: '' },
       outputtopic: { value: '' },
       gaDateTime: { value: '' },
@@ -297,7 +297,7 @@
     },
     paletteLabel: function () {
       try {
-        return RED._('node-red-contrib-knx-ultimate/knxUltimateDateTime:knxUltimateDateTime.paletteLabel') || 'DateTime (deprecated)'
+        return RED._('node-red-contrib-knx-slim/knxSlimDateTime:knxSlimDateTime.paletteLabel') || 'DateTime (deprecated)'
       } catch (error) {
         return 'DateTime (deprecated)'
       }
@@ -319,13 +319,13 @@
         const node = this
         $.ajax({
           type: 'POST',
-          url: 'knxUltimateDateTime/sendNow',
+          url: 'knxSlimDateTime/sendNow',
           data: { id: node.id },
           success: function (response) {
             const queued = response && response.queued === true
             const message = queued
-              ? (RED._('node-red-contrib-knx-ultimate/knxUltimateDateTime:knxUltimateDateTime.notifyQueued') || 'Queued (gateway not connected yet)')
-              : (RED._('node-red-contrib-knx-ultimate/knxUltimateDateTime:knxUltimateDateTime.notifySent') || 'Sent to KNX')
+              ? (RED._('node-red-contrib-knx-slim/knxSlimDateTime:knxSlimDateTime.notifyQueued') || 'Queued (gateway not connected yet)')
+              : (RED._('node-red-contrib-knx-slim/knxSlimDateTime:knxSlimDateTime.notifySent') || 'Sent to KNX')
             RED.notify(message, 'success')
           },
           error: function (xhr) {
@@ -362,7 +362,7 @@
         if (!serverId) return Promise.resolve([])
         if (KNX_GA_CACHE.has(serverId)) return Promise.resolve(KNX_GA_CACHE.get(serverId))
         return new Promise((resolve) => {
-          $.getJSON(`knxUltimatecsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
+          $.getJSON(`knxSlimcsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
             const list = Array.isArray(data) ? data : []
             KNX_GA_CACHE.set(serverId, list)
             resolve(list)
@@ -427,7 +427,7 @@
                 }
               }
             })
-            .on('focus.knxUltimateDateTime click.knxUltimateDateTime', function () {
+            .on('focus.knxSlimDateTime click.knxSlimDateTime', function () {
               const currentValue = $(this).val() || ''
               try { $(this).autocomplete('search', `${currentValue} exactmatch`) } catch (error) { /* ignore */ }
             })
@@ -485,89 +485,89 @@
   })
 </script>
 
-<script type="text/html" data-template-name="knxUltimateDateTime">
+<script type="text/html" data-template-name="knxSlimDateTime">
   <div class="form-row knx-utility-legacy-notice" role="note" style="box-sizing:border-box; padding:10px 12px; margin-bottom:12px; border-left:4px solid #d79b00; background:#fff8df; color:#4d3a00;">
     <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-    <span data-i18n="knxUltimateDateTime.legacy_notice"></span>
+    <span data-i18n="knxSlimDateTime.legacy_notice"></span>
   </div>
   <div class="form-row knx-utility-legacy-migration-action" style="margin-bottom:14px;">
-    <button type="button" class="red-ui-button knx-utility-migrate-flow" style="background:#d97706; border-color:#b45309; color:#fff !important; font-weight:700;" data-i18n="[title]knxUltimateDateTime.migration_button_title">
-      <i class="fa fa-exchange" style="color:#fff !important;"></i> <span style="color:#fff !important;" data-i18n="knxUltimateDateTime.migration_button"></span>
+    <button type="button" class="red-ui-button knx-utility-migrate-flow" style="background:#d97706; border-color:#b45309; color:#fff !important; font-weight:700;" data-i18n="[title]knxSlimDateTime.migration_button_title">
+      <i class="fa fa-exchange" style="color:#fff !important;"></i> <span style="color:#fff !important;" data-i18n="knxSlimDateTime.migration_button"></span>
     </button>
   </div>
   <div class="form-row" style="margin-bottom:10px;">
-    <span style="color:#ff0000"><i class="fa fa-youtube"></i></span>&nbsp;<a target="_blank" href="https://www.youtube.com/playlist?list=PL9Yh1bjbLAYrU8PsVhW4xzEug2WtVFv3E"><b>KNX-Ultimate video tutorials (YouTube playlist)</b></a>
+    <span style="color:#ff0000"><i class="fa fa-youtube"></i></span>&nbsp;<a target="_blank" href="https://www.youtube.com/playlist?list=PL9Yh1bjbLAYrU8PsVhW4xzEug2WtVFv3E"><b>KNX-Slim video tutorials (YouTube playlist)</b></a>
   </div>
   <div class="form-row" style="display:flex; align-items:center;">
-    <label for="node-input-server" style="width:180px"><i class="fa fa-circle-o"></i> <span data-i18n="knxUltimateDateTime.node-input-server"></span></label>
+    <label for="node-input-server" style="width:180px"><i class="fa fa-circle-o"></i> <span data-i18n="knxSlimDateTime.node-input-server"></span></label>
     <input type="text" id="node-input-server" style="flex:1">
   </div>
 
   <div class="form-row" style="display:flex; align-items:center;">
-    <label for="node-input-name" style="width:180px"><i class="fa fa-tag"></i> <span data-i18n="knxUltimateDateTime.node-input-name"></span></label>
+    <label for="node-input-name" style="width:180px"><i class="fa fa-tag"></i> <span data-i18n="knxSlimDateTime.node-input-name"></span></label>
     <input type="text" id="node-input-name" style="flex:1" placeholder="KNX DateTime">
   </div>
 
   <div class="form-row" style="display:flex; align-items:center;">
-    <label for="node-input-outputtopic" style="width:180px"><i class="fa fa-comment"></i> <span data-i18n="knxUltimateDateTime.node-input-outputtopic"></span></label>
-    <input type="text" id="node-input-outputtopic" style="flex:1" placeholder="events/knx/datetime" data-i18n="[placeholder]knxUltimateDateTime.placeholders.outputtopic">
+    <label for="node-input-outputtopic" style="width:180px"><i class="fa fa-comment"></i> <span data-i18n="knxSlimDateTime.node-input-outputtopic"></span></label>
+    <input type="text" id="node-input-outputtopic" style="flex:1" placeholder="events/knx/datetime" data-i18n="[placeholder]knxSlimDateTime.placeholders.outputtopic">
   </div>
 
   <hr>
   <div class="form-row" style="margin:4px 0 2px;">
-    <span style="font-weight:bold;" data-i18n="knxUltimateDateTime.section_addresses"></span>
+    <span style="font-weight:bold;" data-i18n="knxSlimDateTime.section_addresses"></span>
   </div>
 
   <div class="form-row" style="display:flex; align-items:center; gap:8px;">
-    <label for="node-input-gaDateTime" style="width:180px"><i class="fa fa-calendar"></i> <span data-i18n="knxUltimateDateTime.gaDateTime"></span></label>
-    <input type="text" id="node-input-gaDateTime" style="width:160px" placeholder="1/7/1" data-i18n="[placeholder]knxUltimateDateTime.placeholders.ga">
-    <input type="text" id="node-input-nameDateTime" style="flex:1" placeholder="DateTime object" data-i18n="[placeholder]knxUltimateDateTime.placeholders.nameDateTime">
+    <label for="node-input-gaDateTime" style="width:180px"><i class="fa fa-calendar"></i> <span data-i18n="knxSlimDateTime.gaDateTime"></span></label>
+    <input type="text" id="node-input-gaDateTime" style="width:160px" placeholder="1/7/1" data-i18n="[placeholder]knxSlimDateTime.placeholders.ga">
+    <input type="text" id="node-input-nameDateTime" style="flex:1" placeholder="DateTime object" data-i18n="[placeholder]knxSlimDateTime.placeholders.nameDateTime">
     <label for="node-input-dptDateTime" style="width:60px; text-align:right">DPT</label>
     <input type="text" id="node-input-dptDateTime" style="width:160px" readonly>
   </div>
 
   <div class="form-row" style="display:flex; align-items:center; gap:8px;">
-    <label for="node-input-gaDate" style="width:180px"><i class="fa fa-calendar-o"></i> <span data-i18n="knxUltimateDateTime.gaDate"></span></label>
-    <input type="text" id="node-input-gaDate" style="width:160px" placeholder="1/7/2" data-i18n="[placeholder]knxUltimateDateTime.placeholders.ga">
-    <input type="text" id="node-input-nameDate" style="flex:1" placeholder="Date object" data-i18n="[placeholder]knxUltimateDateTime.placeholders.nameDate">
+    <label for="node-input-gaDate" style="width:180px"><i class="fa fa-calendar-o"></i> <span data-i18n="knxSlimDateTime.gaDate"></span></label>
+    <input type="text" id="node-input-gaDate" style="width:160px" placeholder="1/7/2" data-i18n="[placeholder]knxSlimDateTime.placeholders.ga">
+    <input type="text" id="node-input-nameDate" style="flex:1" placeholder="Date object" data-i18n="[placeholder]knxSlimDateTime.placeholders.nameDate">
     <label for="node-input-dptDate" style="width:60px; text-align:right">DPT</label>
     <input type="text" id="node-input-dptDate" style="width:160px" readonly>
   </div>
 
   <div class="form-row" style="display:flex; align-items:center; gap:8px;">
-    <label for="node-input-gaTime" style="width:180px"><i class="fa fa-clock-o"></i> <span data-i18n="knxUltimateDateTime.gaTime"></span></label>
-    <input type="text" id="node-input-gaTime" style="width:160px" placeholder="1/7/3" data-i18n="[placeholder]knxUltimateDateTime.placeholders.ga">
-    <input type="text" id="node-input-nameTime" style="flex:1" placeholder="Time object" data-i18n="[placeholder]knxUltimateDateTime.placeholders.nameTime">
+    <label for="node-input-gaTime" style="width:180px"><i class="fa fa-clock-o"></i> <span data-i18n="knxSlimDateTime.gaTime"></span></label>
+    <input type="text" id="node-input-gaTime" style="width:160px" placeholder="1/7/3" data-i18n="[placeholder]knxSlimDateTime.placeholders.ga">
+    <input type="text" id="node-input-nameTime" style="flex:1" placeholder="Time object" data-i18n="[placeholder]knxSlimDateTime.placeholders.nameTime">
     <label for="node-input-dptTime" style="width:60px; text-align:right">DPT</label>
     <input type="text" id="node-input-dptTime" style="width:160px" readonly>
   </div>
 
   <hr>
   <div class="form-row" style="margin:4px 0 2px;">
-    <span style="font-weight:bold;" data-i18n="knxUltimateDateTime.section_send"></span>
+    <span style="font-weight:bold;" data-i18n="knxSlimDateTime.section_send"></span>
   </div>
 
   <div class="form-row" style="display:flex; align-items:center;">
-    <label for="node-input-sendOnDeploy" style="width:180px"><i class="fa fa-play"></i> <span data-i18n="knxUltimateDateTime.node-input-sendOnDeploy"></span></label>
+    <label for="node-input-sendOnDeploy" style="width:180px"><i class="fa fa-play"></i> <span data-i18n="knxSlimDateTime.node-input-sendOnDeploy"></span></label>
     <input type="checkbox" id="node-input-sendOnDeploy" style="width:auto">
   </div>
 
   <div class="form-row knx-datetime-deploy-options" style="display:flex; align-items:center;">
-    <label for="node-input-sendOnDeployDelay" style="width:180px"><i class="fa fa-clock-o"></i> <span data-i18n="knxUltimateDateTime.node-input-sendOnDeployDelay"></span></label>
+    <label for="node-input-sendOnDeployDelay" style="width:180px"><i class="fa fa-clock-o"></i> <span data-i18n="knxSlimDateTime.node-input-sendOnDeployDelay"></span></label>
     <input type="number" id="node-input-sendOnDeployDelay" style="width:120px">
   </div>
 
   <div class="form-row" style="display:flex; align-items:center;">
-    <label for="node-input-periodicSend" style="width:180px"><i class="fa fa-repeat"></i> <span data-i18n="knxUltimateDateTime.node-input-periodicSend"></span></label>
+    <label for="node-input-periodicSend" style="width:180px"><i class="fa fa-repeat"></i> <span data-i18n="knxSlimDateTime.node-input-periodicSend"></span></label>
     <input type="checkbox" id="node-input-periodicSend" style="width:auto">
   </div>
 
   <div class="form-row knx-datetime-periodic-options" style="display:flex; align-items:center; gap:8px;">
-    <label for="node-input-periodicSendInterval" style="width:180px"><i class="fa fa-hourglass"></i> <span data-i18n="knxUltimateDateTime.node-input-periodicSendInterval"></span></label>
+    <label for="node-input-periodicSendInterval" style="width:180px"><i class="fa fa-hourglass"></i> <span data-i18n="knxSlimDateTime.node-input-periodicSendInterval"></span></label>
     <input type="number" id="node-input-periodicSendInterval" style="width:120px">
     <select id="node-input-periodicSendUnit" style="width:160px">
-      <option value="s" data-i18n="knxUltimateDateTime.unit_seconds"></option>
-      <option value="m" data-i18n="knxUltimateDateTime.unit_minutes"></option>
+      <option value="s" data-i18n="knxSlimDateTime.unit_seconds"></option>
+      <option value="m" data-i18n="knxSlimDateTime.unit_minutes"></option>
     </select>
   </div>
 </script>

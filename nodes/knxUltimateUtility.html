@@ -1,15 +1,15 @@
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/htmlUtils.js"></script>
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/knxUtilityProfiles.js"></script>
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/flowMigrationBackup.js"></script>
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/knxUtilityMigration.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/htmlUtils.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/knxUtilityProfiles.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/flowMigrationBackup.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/knxUtilityMigration.js"></script>
 
 <script type="text/javascript">
   (function () {
-    const profiles = window.KNXUltimateUtilityProfiles;
+    const profiles = window.KNXSlimUtilityProfiles;
     const types = Object.keys(profiles.PROFILE_TYPES);
     const clone = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
     const definition = (type) => types.includes(type) ? profiles.getDefinition(type, RED) : undefined;
-    const text = (key) => RED._('node-red-contrib-knx-ultimate/knxUltimateUtility:knxUltimateUtility.' + key);
+    const text = (key) => RED._('node-red-contrib-knx-slim/knxSlimUtility:knxSlimUtility.' + key);
     const activeType = (node) => node._utilityEditor ? node._utilityEditor.type() : node.utilityType;
     const validationContext = (node) => typeof node._utilityEditor?.values === 'function' ? node._utilityEditor.values() : node;
 
@@ -19,13 +19,13 @@
       const defaults = {
         server: {
           value: '',
-          type: 'knxUltimate-config',
+          type: 'knxSlim-config',
           validate: function (value) {
             const descriptor = definition(activeType(this))?.defaults.server;
             if (!descriptor) return true;
             if (!value || value === '_ADD_') return false;
             const gateway = RED.nodes.node(value);
-            return Boolean(gateway && gateway.type === 'knxUltimate-config' && gateway.valid !== false);
+            return Boolean(gateway && gateway.type === 'knxSlim-config' && gateway.valid !== false);
           }
         },
         name: {
@@ -99,12 +99,12 @@
       });
     }
 
-    RED.nodes.registerType('knxUltimateUtility', {
-      category: 'KNX Ultimate',
+    RED.nodes.registerType('knxSlimUtility', {
+      category: 'KNX Slim',
       color: '#C7E9C0',
       defaults: buildDefaults(),
       catalogDefaults: {
-        server: { type: 'knxUltimate-config' }, name: {}, utilityType: {}, inputs: {}, outputs: {}
+        server: { type: 'knxSlim-config' }, name: {}, utilityType: {}, inputs: {}, outputs: {}
       },
       inputs: 1,
       outputs: 3,
@@ -253,7 +253,7 @@
         };
         const initialType = node.utilityType || 'alerter';
         $('#node-input-utilityType').val(initialType).on('change.knxUtility', function () { render($(this).val(), false); });
-        const migration = window.KNXUltimateUtilityMigration;
+        const migration = window.KNXSlimUtilityMigration;
         $('#knx-utility-migration-row').toggle(Boolean(migration && migration.collectLegacyUtilityNodes(RED).length));
         render(initialType, true);
       },
@@ -286,31 +286,31 @@
   #knx-utility-migration-row .red-ui-button { background: #d97706; border-color: #b45309; color: white; }
 </style>
 
-<script type="text/html" data-template-name="knxUltimateUtility">
+<script type="text/html" data-template-name="knxSlimUtility">
   <div class="form-row" id="knx-utility-migration-row" style="display:none">
-    <button type="button" class="red-ui-button knx-utility-migrate-flow" data-i18n="[title]knxUltimateUtility.migration_button_title"><i class="fa fa-exchange"></i> <span data-i18n="knxUltimateUtility.migration_button"></span></button>
+    <button type="button" class="red-ui-button knx-utility-migrate-flow" data-i18n="[title]knxSlimUtility.migration_button_title"><i class="fa fa-exchange"></i> <span data-i18n="knxSlimUtility.migration_button"></span></button>
   </div>
   <div class="form-row">
-    <label for="node-input-utilityType"><i class="fa fa-cogs"></i> <span data-i18n="knxUltimateUtility.function"></span></label>
+    <label for="node-input-utilityType"><i class="fa fa-cogs"></i> <span data-i18n="knxSlimUtility.function"></span></label>
     <select id="node-input-utilityType" style="width:70%">
-      <option value="alerter" data-i18n="knxUltimateUtility.types.alerter"></option>
-      <option value="autoresponder" data-i18n="knxUltimateUtility.types.autoresponder"></option>
-      <option value="datetime" data-i18n="knxUltimateUtility.types.datetime"></option>
-      <option value="watchdog" data-i18n="knxUltimateUtility.types.watchdog"></option>
-      <option value="globalcontext" data-i18n="knxUltimateUtility.types.globalcontext"></option>
+      <option value="alerter" data-i18n="knxSlimUtility.types.alerter"></option>
+      <option value="autoresponder" data-i18n="knxSlimUtility.types.autoresponder"></option>
+      <option value="datetime" data-i18n="knxSlimUtility.types.datetime"></option>
+      <option value="watchdog" data-i18n="knxSlimUtility.types.watchdog"></option>
+      <option value="globalcontext" data-i18n="knxSlimUtility.types.globalcontext"></option>
     </select>
   </div>
   <div class="form-row" id="knx-utility-gateway-row">
-    <label for="node-input-server"><i class="fa fa-circle-o"></i> <span data-i18n="knxUltimateUtility.gateway"></span></label>
+    <label for="node-input-server"><i class="fa fa-circle-o"></i> <span data-i18n="knxSlimUtility.gateway"></span></label>
     <input type="text" id="node-input-server">
   </div>
   <div class="form-row">
-    <label for="node-input-name"><i class="fa fa-tag"></i> <span id="knx-utility-name-label" data-i18n="knxUltimateUtility.name"></span></label>
+    <label for="node-input-name"><i class="fa fa-tag"></i> <span id="knx-utility-name-label" data-i18n="knxSlimUtility.name"></span></label>
     <input type="text" id="node-input-name">
   </div>
-  <div class="form-row" id="knx-utility-name-description" style="display:none" data-i18n="knxUltimateUtility.variable_name_description"></div>
+  <div class="form-row" id="knx-utility-name-description" style="display:none" data-i18n="knxSlimUtility.variable_name_description"></div>
   <div class="form-row" id="knx-utility-pin-description" style="opacity:.8"></div>
-  <div class="form-tips" id="knx-utility-invalid-function" style="display:none" data-i18n="knxUltimateUtility.invalid_function"></div>
+  <div class="form-tips" id="knx-utility-invalid-function" style="display:none" data-i18n="knxSlimUtility.invalid_function"></div>
   <input type="hidden" id="node-input-inputs">
   <input type="hidden" id="node-input-outputs">
   <hr>

@@ -98,7 +98,7 @@
   },
   {
     "id": "node_knx_router_filter",
-    "type": "knxUltimateRouterFilter",
+    "type": "knxSlimRouterFilter",
     "z": "tab_knx_rf_sample",
     "name": "Filter + rewrite",
     "allowWrite": true,

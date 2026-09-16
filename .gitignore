@@ -3,7 +3,7 @@ node_modules
 .code-workspace
 .vscode/
 package-lock.json
-KNXUltimateDebugLog.txt
+KNXSlimDebugLog.txt
 AGENTS.md
 
 tutorial
@@ -32,8 +32,8 @@ test/*
 !test/disabledSidebarPlugins.test.js
 !test/hueController.test.js
 !test/docsNavigation.test.js
-!test/knxUltimateWatchDog.test.js
-!test/knxUltimateIoTBridge.test.js
+!test/knxSlimWatchDog.test.js
+!test/knxSlimIoTBridge.test.js
 !test/knxFunctionAutocomplete.test.js
 !test/knxUtilityRuntime.test.js
 !test/knxUtilityProfiles.test.js

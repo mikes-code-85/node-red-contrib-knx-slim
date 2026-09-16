@@ -4,10 +4,10 @@
 // Keep informational tips aligned with the full width of our Node-RED editor forms.
 // Node-RED applies a max-width to .form-tips by default, which otherwise leaves
 // inconsistent empty space in wider edit dialogs.
-;(function ensureKnxUltimateEditorStyles () {
-  if (document.getElementById('knx-ultimate-editor-styles')) return
+;(function ensureKnxSlimEditorStyles () {
+  if (document.getElementById('knx-slim-editor-styles')) return
   const style = document.createElement('style')
-  style.id = 'knx-ultimate-editor-styles'
+  style.id = 'knx-slim-editor-styles'
   style.textContent = '.form-tips { width: 100% !important; max-width: none !important; box-sizing: border-box !important; background-color: #e8f5e9 !important; }'
   document.head.appendChild(style)
 })()
@@ -51,7 +51,7 @@ function KNX_fetchSecureGAs (serverId) {
         resolve(window.__knxSecureGAsCache[serverId])
         return
       }
-      $.getJSON('knxUltimateKeyringDataSecureGAs?serverId=' + serverId + '&_=' + new Date().getTime(), (data) => {
+      $.getJSON('knxSlimKeyringDataSecureGAs?serverId=' + serverId + '&_=' + new Date().getTime(), (data) => {
         try {
           const set = new Set()
           if (Array.isArray(data)) data.forEach(ga => { if (typeof ga === 'string') set.add(ga) })

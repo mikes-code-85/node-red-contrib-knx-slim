@@ -1,5 +1,5 @@
 {
-    "knxUltimateAlerter": {
+    "knxSlimAlerter": {
         "paletteLabel": "KNX Alerter (deprecated)",
         "title": "Alerter node",
         "properties": {

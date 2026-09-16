@@ -27,7 +27,7 @@
   "watchdog": [
     "autoStart",
     "checkLevel",
-    "listenToKnxUltimateNodeErrors",
+    "listenToKnxSlimNodeErrors",
     "maxRetry",
     "retryInterval",
     "topic"

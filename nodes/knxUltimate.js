@@ -4,7 +4,7 @@ const coerceBoolean = (value) => (value === true || value === 'true')
 
 let buttonEndpointRegistered = false
 let liveStateEndpointRegistered = false
-const knxUltimateLiveState = new Map()
+const knxSlimLiveState = new Map()
 
 const resolveBubbleColor = (status = {}) => {
   const fill = typeof status.fill === 'string' ? status.fill.trim().toLowerCase() : ''
@@ -42,10 +42,10 @@ const normalizePayloadForBubble = (payload) => {
   return String(payload)
 }
 
-const storeKnxUltimateLiveState = (node, status = {}) => {
+const storeKnxSlimLiveState = (node, status = {}) => {
   if (!node || !node.id) return
   const payload = Object.prototype.hasOwnProperty.call(status, 'payload') ? status.payload : node.currentPayload
-  knxUltimateLiveState.set(node.id, {
+  knxSlimLiveState.set(node.id, {
     id: node.id,
     topic: node.topic || '',
     name: node.name || '',
@@ -279,8 +279,8 @@ module.exports = function (RED) {
       }
     }
 
-    RED.httpAdmin.post('/knxUltimate/buttonAction', RED.auth.needsPermission('knxUltimate-config.write'), handleButtonAction)
-    RED.httpAdmin.post('/knxUltimate/manualRead', RED.auth.needsPermission('knxUltimate-config.write'), (req, res) => {
+    RED.httpAdmin.post('/knxSlim/buttonAction', RED.auth.needsPermission('knxSlim-config.write'), handleButtonAction)
+    RED.httpAdmin.post('/knxSlim/manualRead', RED.auth.needsPermission('knxSlim-config.write'), (req, res) => {
       if (!req.body) req.body = {}
       if (!req.body.mode) req.body.mode = 'read'
       handleButtonAction(req, res)
@@ -289,9 +289,9 @@ module.exports = function (RED) {
   }
 
   if (!liveStateEndpointRegistered) {
-    RED.httpAdmin.get('/knxUltimate/editorLiveState', RED.auth.needsPermission('knxUltimate-config.read'), (req, res) => {
+    RED.httpAdmin.get('/knxSlim/editorLiveState', RED.auth.needsPermission('knxSlim-config.read'), (req, res) => {
       try {
-        const nodes = Array.from(knxUltimateLiveState.values())
+        const nodes = Array.from(knxSlimLiveState.values())
         res.json({ nodes, updatedAt: Date.now() })
       } catch (error) {
         res.status(500).json({ error: error.message || String(error) })
@@ -304,7 +304,7 @@ module.exports = function (RED) {
   const payloadRounder = require('./utils/payloadManipulation')
   const dptlib = require('knxultimate').dptlib
 
-  function knxUltimate (config) {
+  function knxSlim (config) {
     RED.nodes.createNode(this, config)
     const node = this
     node.serverKNX = RED.nodes.getNode(config.server) || undefined
@@ -318,7 +318,7 @@ module.exports = function (RED) {
     }
 
     if (node.serverKNX === undefined) {
-      storeKnxUltimateLiveState(node, { fill: 'red', shape: 'dot', text: '[THE GATEWAY NODE HAS BEEN DISABLED]', payload: node.currentPayload })
+      storeKnxSlimLiveState(node, { fill: 'red', shape: 'dot', text: '[THE GATEWAY NODE HAS BEEN DISABLED]', payload: node.currentPayload })
       pushStatus({ fill: 'red', shape: 'dot', text: '[THE GATEWAY NODE HAS BEEN DISABLED]' })
       return
     }
@@ -341,7 +341,7 @@ module.exports = function (RED) {
         dpt = (typeof dpt === 'undefined' || dpt == '') ? '' : ` DPT${dpt}`
         payload = typeof payload === 'object' ? JSON.stringify(payload) : payload
         const statusText = `${GA + payload + (node.listenallga === true ? ` ${devicename}` : '')} (${ts}) ${text}`
-        storeKnxUltimateLiveState(node, { fill, shape, text: statusText, payload: rawPayload })
+        storeKnxSlimLiveState(node, { fill, shape, text: statusText, payload: rawPayload })
         pushStatus({ fill, shape, text: statusText })
         // 16/02/2020 signal errors to the server
         if (fill.toUpperCase() === 'RED') {
@@ -349,7 +349,7 @@ module.exports = function (RED) {
             const oError = {
               nodeid: node.id, topic: node.outputtopic, devicename, GA, text
             }
-            node.serverKNX.reportToWatchdogCalledByKNXUltimateNode(oError)
+            node.serverKNX.reportToWatchdogCalledByKNXSlimNode(oError)
           }
         }
         // Validate the Address to advise the user. The address can be undefined, because the
@@ -433,7 +433,7 @@ module.exports = function (RED) {
     node.buttonStaticValue = config.buttonStaticValue || ''
     node.buttonToggleInitial = coerceBoolean(config.buttonToggleInitial)
     node._buttonToggleState = node.buttonToggleInitial
-    storeKnxUltimateLiveState(node, {
+    storeKnxSlimLiveState(node, {
       fill: 'grey',
       shape: 'ring',
       text: 'Waiting for KNX traffic',
@@ -646,7 +646,7 @@ module.exports = function (RED) {
       }
     }
 
-    // This function is called by the knx-ultimate config node, to output a msg.payload.
+    // This function is called by the knx-slim config node, to output a msg.payload.
     node.handleSend = async (msg) => {
       // 27/03/2020 can i merge the last input msg arrived, with the output?
       try {
@@ -680,7 +680,7 @@ module.exports = function (RED) {
           const receiveMsgFromKNXCode = (new (Object.getPrototypeOf(async function () { }).constructor)('msg', 'getGAValue', 'node', 'RED', 'self', 'toggle', 'setGAValue', node.receiveMsgFromKNXCode))
           msg = await receiveMsgFromKNXCode(msg, getGAValue, node, RED, self, toggle, setGAValue)
         } catch (error) {
-          RED.log.error('knxUltimate: receiveMsgFromKNXCode: node ID:' + node.id + ' ' + error.message)
+          RED.log.error('knxSlim: receiveMsgFromKNXCode: node ID:' + node.id + ' ' + error.message)
           if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`receiveMsgFromKNXCode: node id ${node.id} ` || ' ' + error.stack)
           return
         }
@@ -747,7 +747,7 @@ module.exports = function (RED) {
           msg = await sendMsgToKNXCode(msg, getGAValue, node, RED, self, toggle, setGAValue)
           if (msg === undefined) return
         } catch (error) {
-          RED.log.error('knxUltimate: sendMsgToKNXCode: node ID:' + node.id + ' ' + error.message)
+          RED.log.error('knxSlim: sendMsgToKNXCode: node ID:' + node.id + ' ' + error.message)
           if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`sendMsgToKNXCode: node id ${node.id} ` || ' ' + error.stack)
           return
         }
@@ -762,7 +762,7 @@ module.exports = function (RED) {
         if (node.listenallga == false) {
           grpaddr = node.topic
           if (msg.hasOwnProperty('destination')) grpaddr = msg.destination
-          // 29/12/2020 Protection over circular references (for example, if you link two Ultimate Nodes toghether with the same group address), to prevent infinite loops
+          // 29/12/2020 Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
           if (msg.hasOwnProperty('knx')) {
             if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Response' || msg.knx.event === 'GroupValue_Read'))) {
               if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection during READ. The node ${node.id} has been temporary disabled. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
@@ -784,7 +784,7 @@ module.exports = function (RED) {
           if (msg.hasOwnProperty('destination')) {
             // listenallga is true, but the user specified own group address
             grpaddr = msg.destination
-            // 29/12/2020 Protection over circular references (for example, if you link two Ultimate Nodes toghether with the same group address), to prevent infinite loops
+            // 29/12/2020 Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
             if (msg.hasOwnProperty('knx')) {
               if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Response' || msg.knx.event === 'GroupValue_Read'))) {
                 if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection during READ-2. The node ${node.id} has been temporary disabled. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
@@ -801,13 +801,13 @@ module.exports = function (RED) {
             })
           } else {
             // Issue read to all group addresses
-            // 25/10/2019 the user is able not import the csv, so i need to check for it. This option should be unckecked by the knxUltimate html config, but..
+            // 25/10/2019 the user is able not import the csv, so i need to check for it. This option should be unckecked by the knxSlim html config, but..
             if (typeof node.serverKNX.csv !== 'undefined') {
               let delay = 0
               for (let index = 0; index < node.serverKNX.csv.length; index++) {
                 const element = node.serverKNX.csv[index]
                 const grpaddr = element.ga
-                // 29/12/2020 Protection over circular references (for example, if you link two Ultimate Nodes toghether with the same group address), to prevent infinite loops
+                // 29/12/2020 Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
                 if (msg.hasOwnProperty('knx')) {
                   if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Response' || msg.knx.event === 'GroupValue_Read'))) {
                     if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection during READ-3. Node ${node.id} The read request hasn't been sent. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
@@ -835,7 +835,7 @@ module.exports = function (RED) {
                 node.setNodeStatus({
                   fill: 'red', shape: 'dot', text: "Read: ETS file not set, i don't know where to send the read request.", payload: '', GA: '', dpt: '', devicename: node.name
                 })
-                if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`KNX-Ultimate: ETS file not set, i don't know where to send the read request. I'm the node ${node.id}`)
+                if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`KNX-Slim: ETS file not set, i don't know where to send the read request. I'm the node ${node.id}`)
               }, 100)
             }
           }
@@ -928,7 +928,7 @@ module.exports = function (RED) {
             dpt = (msg.hasOwnProperty('dpt') && msg.dpt !== undefined && msg.dpt !== '') ? msg.dpt : node.dpt
           }
 
-          // Protection over circular references (for example, if you link two Ultimate Nodes toghether with the same group address), to prevent infinite loops
+          // Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
           if (msg.hasOwnProperty('knx')) {
             if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Write' && outputtype === 'write') || (msg.knx.event === 'GroupValue_Response' && outputtype === 'response') || (msg.knx.event === 'GroupValue_Response' && outputtype === 'read') || (msg.knx.event === 'GroupValue_Read' && outputtype === 'read'))) {
               if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection. The node ${node.id} has been temporarely disabled. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
@@ -1030,7 +1030,7 @@ module.exports = function (RED) {
       if (node.timerTTLInputMessage !== null) clearTimeout(node.timerTTLInputMessage)
       clearPeriodicSendTimer()
       node.inputmessage = {}
-      knxUltimateLiveState.delete(node.id)
+      knxSlimLiveState.delete(node.id)
       if (node.serverKNX) {
         node.serverKNX.removeClient(node)
         try {
@@ -1062,5 +1062,5 @@ module.exports = function (RED) {
     // Start periodic send timer (optional)
     startPeriodicSendTimer()
   }
-  RED.nodes.registerType('knxUltimate', knxUltimate)
+  RED.nodes.registerType('knxSlim', knxSlim)
 }

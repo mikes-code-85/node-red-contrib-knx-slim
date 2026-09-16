@@ -23,7 +23,7 @@ module.exports.ToBoolean = function ToBoolean (value, _configTranslationNode) {
         }
       }
     } catch (error) {
-      console.log('Boolean-Logic-Ultimate:utils:toBoolean: ' + error.message)
+      console.log('Boolean-Logic-Slim:utils:toBoolean: ' + error.message)
     }
   } else if (typeof value === 'number') {
     // Is it formated as a decimal number?

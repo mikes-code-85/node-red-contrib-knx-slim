@@ -1,4 +1,4 @@
-<script type="text/markdown" data-help-name="knxUltimate-config">
+<script type="text/markdown" data-help-name="knxSlim-config">
 # KNX Gateway Configuration
 
 <p>This node connects to your KNX gateway, whether it is an IP interface/router or a TP/FT1.2 serial adapter.</p>
@@ -23,7 +23,7 @@
 | Bind to local interface | The Node will use this local interface for communications. Leave "Auto" for automatic selection. If you have more than one lan connection, for example Ethernet and Wifi, it's strongly recommended to manually select the interface, otherwise not all UDP telegram will reach your computer, thus the Node may not work as expected. Default is "Auto". |
 | Automatically connect to KNX BUS at start | Auto connect to the bus at start. Default is "Yes". |
 | Secure credentials source | Choose how KNX Secure data is supplied: **ETS keyring file** (Data Secure keys - and tunnelling credentials if present - come from the keyring), **Manual credentials** (only KNX IP Tunnelling Secure with a manually entered user), or **Keyring + manual tunnel password** (Data Secure keys from the keyring while the secure tunnel uses the manual user/password). Remember that KNX Data Secure telegrams always require a keyring file. |
-| Tunnel interface individual address | Visible whenever the selected mode includes manual credentials (Manual or Keyring + manual tunnel password). Optional KNX individual address for the secure tunnel interface (for example `1.1.1`); leave empty to let KNX Ultimate negotiate it automatically. |
+| Tunnel interface individual address | Visible whenever the selected mode includes manual credentials (Manual or Keyring + manual tunnel password). Optional KNX individual address for the secure tunnel interface (for example `1.1.1`); leave empty to let KNX Slim negotiate it automatically. |
 | Tunnel user ID | Visible when manual credentials are used. Optional KNX Secure tunnel user identifier defined in ETS. |
 | Tunnel user password | Visible when manual credentials are used. Password of the KNX Secure tunnelling user configured in ETS. |
 
@@ -72,17 +72,17 @@
 
 <img src='https://raw.githubusercontent.com/Supergiovane/node-red-contrib-knx-ultimate/master/img/wiki/etslogo.png'>
 
-Instead of create a knx-ultimate node for each Group Address to control, you can import your ETS csv group addresses file or, starting from V 1.1.35, an ESF file as well (If, for example, you only have ETS Inside). Supported ETS versions: ETS 4 and onwards.<br/>
+Instead of create a knx-slim node for each Group Address to control, you can import your ETS csv group addresses file or, starting from V 1.1.35, an ESF file as well (If, for example, you only have ETS Inside). Supported ETS versions: ETS 4 and onwards.<br/>
 
 Starting from version 1.4.18, you can also simply enter the path to the file in this field (e.g.: /home/pi/mycsv.csv).<br/>
 
-Thanks to that, the knx-ultimate node where you selected **Universal mode (listen to all Group Addresses)** , becomes an universal input/output node, aware of all Datapoints, Group Addresses and Device's name (ex: Living Room Lamp). Just send the payload to the knx-ultimate node, and it'll encode it with the right datapoint and send it to the bus. Likewise, when the knx-ultimate node receives a telegram from the bus, it outputs a right decoded payload using the datapoint specified in the ETS CSV or ESF file.
+Thanks to that, the knx-slim node where you selected **Universal mode (listen to all Group Addresses)** , becomes an universal input/output node, aware of all Datapoints, Group Addresses and Device's name (ex: Living Room Lamp). Just send the payload to the knx-slim node, and it'll encode it with the right datapoint and send it to the bus. Likewise, when the knx-slim node receives a telegram from the bus, it outputs a right decoded payload using the datapoint specified in the ETS CSV or ESF file.
 
 Starting from **Version 1.1.11**, you can use **Universal mode (listen to all Group Addresses)** option without the need of an imported ETS CSV or ESF File. You need to pass a message to the node, containing datapoint type and a value. As soon as the node receives a telegram from KNX Bus, it will output a RAW value and beside that, it will try to decode the value without knowing the datapoint type.<br />**Note**: _ETS CSV Group address exported file_ is way the best option, because it contain a precise datapoints with subtype. _ETS ESF exported file_ is simpler and it doesn't have the subtype.<br />
 
 If you can use both, please prefer the **ETS CSV Group address exported file**, because the ESF can lead to a false output values. Please manually check and eventually adjust the datapoints each time you import the **ESF** file.<br />From version 1.4.1 you can import group addresses also at runtime, via msg, using the WatchDog node. <br />
 
-> You can work with a mix of knx-ultimate nodes, some with **Universal mode (listen to all Group Addresses)** checked and some not. You are absolutely free!
+> You can work with a mix of knx-slim nodes, some with **Universal mode (listen to all Group Addresses)** checked and some not. You are absolutely free!
 
 <a href="https://youtu.be/egRbR_KwP9I"><img src='https://raw.githubusercontent.com/Supergiovane/node-red-contrib-knx-ultimate/master/img/yt.png'></a>
 

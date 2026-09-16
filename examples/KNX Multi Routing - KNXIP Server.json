@@ -10,7 +10,7 @@
     "id": "cmt_knx_mr_srv_1",
     "type": "comment",
     "z": "tab_knx_mr_srv_sample",
-    "name": "Use knxUltimateMultiRouting as a standalone KNXnet/IP Tunneling Server (UDP).",
+    "name": "Use knxSlimMultiRouting as a standalone KNXnet/IP Tunneling Server (UDP).",
     "info": "1) Deploy.\n2) Configure your KNX/IP tunneling client to connect to this Node-RED host on tunnelListenPort (default 3671).\n3) Watch the RAW telegrams in the Debug node.\n\nTo test the INPUT side: after at least one telegram is received, click the inject node \"Replay last\" to inject the last received telegram back to connected tunneling client(s).",
     "x": 430,
     "y": 40,
@@ -18,7 +18,7 @@
   },
   {
     "id": "mr_tunnel_server",
-    "type": "knxUltimateMultiRouting",
+    "type": "knxSlimMultiRouting",
     "z": "tab_knx_mr_srv_sample",
     "mode": "server",
     "server": "",

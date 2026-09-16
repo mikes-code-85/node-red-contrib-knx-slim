@@ -5,7 +5,7 @@ const registerSendNowEndpoint = require('./utils/knxDateTimeSendNow')
 module.exports = function (RED) {
   registerSendNowEndpoint(RED)
 
-  function knxUltimateDateTime (config) {
+  function knxSlimDateTime (config) {
     RED.nodes.createNode(this, config)
     const node = this
 
@@ -83,8 +83,8 @@ module.exports = function (RED) {
         }
         const composed = `${gaLabel}${payloadLabel}${deviceLabel}${dptLabel} (${ts}) ${statusText}`.trim()
         pushStatus({ fill, shape, text: composed })
-        if (fill && fill.toUpperCase() === 'RED' && node.serverKNX && typeof node.serverKNX.reportToWatchdogCalledByKNXUltimateNode === 'function') {
-          node.serverKNX.reportToWatchdogCalledByKNXUltimateNode({ nodeid: node.id, topic: node.outputtopic, devicename, GA, text: statusText })
+        if (fill && fill.toUpperCase() === 'RED' && node.serverKNX && typeof node.serverKNX.reportToWatchdogCalledByKNXSlimNode === 'function') {
+          node.serverKNX.reportToWatchdogCalledByKNXSlimNode({ nodeid: node.id, topic: node.outputtopic, devicename, GA, text: statusText })
         }
       } catch (error) {
         node.sysLogger?.warn(`Status update failed: ${error.message}`)
@@ -184,11 +184,11 @@ module.exports = function (RED) {
       })
 
       const outMsg = {
-        topic: node.outputtopic || node.name || 'knxUltimateDateTime',
+        topic: node.outputtopic || node.name || 'knxSlimDateTime',
         payload: dateObj,
         reason,
         sent: destinations.map((d) => ({ ga: d.ga, dpt: d.dpt, name: d.name })),
-        knxUltimateDateTime: {
+        knxSlimDateTime: {
           date: dateObj && dateObj.constructor && dateObj.constructor.name === 'Date' ? dateObj.toISOString() : undefined
         }
       }
@@ -278,5 +278,5 @@ module.exports = function (RED) {
     startTimers()
   }
 
-  RED.nodes.registerType('knxUltimateDateTime', knxUltimateDateTime)
+  RED.nodes.registerType('knxSlimDateTime', knxSlimDateTime)
 }

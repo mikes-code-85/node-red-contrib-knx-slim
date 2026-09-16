@@ -1,8 +1,8 @@
-RED.nodes.registerType('knxUltimateAlerter', {
-        category: "KNX Ultimate",
+RED.nodes.registerType('knxSlimAlerter', {
+        category: "KNX Slim",
         color: '#C7E9C0',
         defaults: {
-            server: { type: "knxUltimate-config", required: false },
+            server: { type: "knxSlim-config", required: false },
             name: { value: "" },
             rules: { value: [] },
             whentostart: { value: "ifnewalert" },
@@ -75,7 +75,7 @@ RED.nodes.registerType('knxUltimateAlerter', {
                         minLength: 0,
                         source: function (request, response) {
                             if (!oNodeServer || !oNodeServer.id) { response([]); return; }
-                            $.getJSON("knxUltimatecsv?nodeID=" + oNodeServer.id, (data) => {
+                            $.getJSON("knxSlimcsv?nodeID=" + oNodeServer.id, (data) => {
                                 response($.map(data, function (value, key) {
                                     var sSearch = (value.ga + " (" + value.devicename + ") DPT" + value.dpt);
                                     if (htmlUtilsfullCSVSearch(sSearch, request.term + " 1.")) {
@@ -100,7 +100,7 @@ RED.nodes.registerType('knxUltimateAlerter', {
 
                         }
                     });
-                    oTopicField.on('focus.knxUltimateAlerter click.knxUltimateAlerter', function () {
+                    oTopicField.on('focus.knxSlimAlerter click.knxSlimAlerter', function () {
                         try {
                             $(this).autocomplete('search', '');
                         } catch (error) { /* empty */ }

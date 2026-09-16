@@ -1,5 +1,5 @@
 {
-    "knxUltimate-config": {
+    "knxSlim-config": {
         "properties": {
             "title": "KNX Gateway Configuration",
             "host": "Gateway",

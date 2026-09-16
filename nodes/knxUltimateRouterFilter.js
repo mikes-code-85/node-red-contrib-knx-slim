@@ -286,7 +286,7 @@ const getOrCreateMeta = (msg) => {
 }
 
 module.exports = function (RED) {
-  function knxUltimateRouterFilter (config) {
+  function knxSlimRouterFilter (config) {
     RED.nodes.createNode(this, config)
     const node = this
 
@@ -569,5 +569,5 @@ module.exports = function (RED) {
     setCountersStatus(null)
   }
 
-  RED.nodes.registerType('knxUltimateRouterFilter', knxUltimateRouterFilter)
+  RED.nodes.registerType('knxSlimRouterFilter', knxSlimRouterFilter)
 }

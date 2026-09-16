@@ -28,7 +28,7 @@ module.exports = function (RED) {
   //     lastupdateLocale
   // }
 
-  function knxUltimateGlobalContext (config) {
+  function knxSlimGlobalContext (config) {
     RED.nodes.createNode(this, config)
     const node = this
     node.serverKNX = RED.nodes.getNode(config.server) || undefined
@@ -109,14 +109,14 @@ module.exports = function (RED) {
           const element = oContext[index]
           if (element.hasOwnProperty('address') === false) {
             node.setNodeStatus({ fill: 'RED', shape: 'dot', text: 'NO Group Address set', payload: '', GA: '', dpt: '', devicename: '' })
-            RED.log.error('knxUltimateGlobalContext: No group address set in node ' + node.id)
+            RED.log.error('knxSlimGlobalContext: No group address set in node ' + node.id)
             oContext = null // 21/03/2022
             node.goTimerGo()
             return
           }
           if (element.hasOwnProperty('payload') === false) {
             node.setNodeStatus({ fill: 'RED', shape: 'dot', text: 'NO payload set', payload: '', GA: '', dpt: '', devicename: '' })
-            RED.log.error('knxUltimateGlobalContext: No payload set for address ' + element.address + ' in node ' + node.id)
+            RED.log.error('knxSlimGlobalContext: No payload set for address ' + element.address + ' in node ' + node.id)
             oContext = null // 21/03/2022
             node.goTimerGo()
             return
@@ -129,7 +129,7 @@ module.exports = function (RED) {
               element.dpt = sDPT
             } catch (error) {
               node.setNodeStatus({ fill: 'RED', shape: 'dot', text: 'Datapoint not found in CSV for ' + element.address, payload: '', GA: '', dpt: '', devicename: '' })
-              RED.log.error('knxUltimateGlobalContext: Datapoint not found in CSV for address ' + element.address + ' in node ' + node.id)
+              RED.log.error('knxSlimGlobalContext: Datapoint not found in CSV for address ' + element.address + ' in node ' + node.id)
               oContext = null // 21/03/2022
               node.goTimerGo()
               return
@@ -153,7 +153,7 @@ module.exports = function (RED) {
     }
     // #endregion
 
-    // This function is called by the knx-ultimate config node, to output a msg.payload.
+    // This function is called by the knx-slim config node, to output a msg.payload.
     node.handleSend = msg => {
       if (node.exposeAsVariable !== 'exposeAsVariableNO') {
         try {
@@ -204,5 +204,5 @@ module.exports = function (RED) {
       node.serverKNX.addClient(node)
     }
   }
-  RED.nodes.registerType('knxUltimateGlobalContext', knxUltimateGlobalContext)
+  RED.nodes.registerType('knxSlimGlobalContext', knxSlimGlobalContext)
 }

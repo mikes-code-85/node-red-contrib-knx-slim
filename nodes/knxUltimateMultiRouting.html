@@ -1,12 +1,12 @@
-<script type="text/javascript" src="resources/node-red-contrib-knx-ultimate/htmlUtils.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/htmlUtils.js"></script>
 
 <script type="text/javascript">
-    RED.nodes.registerType('knxUltimateMultiRouting', {
-        category: "KNX Ultimate Router",
+    RED.nodes.registerType('knxSlimMultiRouting', {
+        category: "KNX Slim Router",
         color: 'lightblue',
         defaults: {
             mode: { value: "gateway", required: true },
-            server: { type: "knxUltimate-config", required: false },
+            server: { type: "knxSlim-config", required: false },
             name: { value: "KNX Multi Routing", required: false },
             outputtopic: { value: "", required: false },
             dropIfSameGateway: { value: true },
@@ -23,7 +23,7 @@
         },
         inputs: 1,
         outputs: 1,
-        outputLabels: function () { return RED._('knxUltimateMultiRouting.outputs.raw'); },
+        outputLabels: function () { return RED._('knxSlimMultiRouting.outputs.raw'); },
         icon: "node-knx-icon.svg",
         label: function () {
             return (this.name || "KNX Multi Routing");
@@ -54,78 +54,78 @@
     })
 </script>
 
-<script type="text/html" data-template-name="knxUltimateMultiRouting">
+<script type="text/html" data-template-name="knxSlimMultiRouting">
   <div class="form-row" style="margin-bottom:10px;">
-    <span style="color:#ff0000"><i class="fa fa-youtube"></i></span>&nbsp;<a target="_blank" href="https://www.youtube.com/playlist?list=PL9Yh1bjbLAYrU8PsVhW4xzEug2WtVFv3E"><b>KNX-Ultimate video tutorials (YouTube playlist)</b></a>
+    <span style="color:#ff0000"><i class="fa fa-youtube"></i></span>&nbsp;<a target="_blank" href="https://www.youtube.com/playlist?list=PL9Yh1bjbLAYrU8PsVhW4xzEug2WtVFv3E"><b>KNX-Slim video tutorials (YouTube playlist)</b></a>
   </div>
     <div class="form-row">
-        <b><span data-i18n="knxUltimateMultiRouting.title"></span></b>&nbsp&nbsp<span style="color:red" &nbsp &nbsp<i class="fa fa-youtube"></i></span>&nbsp<a
+        <b><span data-i18n="knxSlimMultiRouting.title"></span></b>&nbsp&nbsp<span style="color:red" &nbsp &nbsp<i class="fa fa-youtube"></i></span>&nbsp<a
             target="_blank" href="https://youtu.be/fGT6BrkTkiM"><u><span data-i18n="common.youtube_sample"></span></u></a>
         <br/><br/>
-        <label for="node-input-mode"><i class="fa fa-sliders"></i> <span data-i18n="knxUltimateMultiRouting.properties.mode"></span></label>
+        <label for="node-input-mode"><i class="fa fa-sliders"></i> <span data-i18n="knxSlimMultiRouting.properties.mode"></span></label>
         <select id="node-input-mode">
-            <option value="gateway" data-i18n="knxUltimateMultiRouting.properties.modeGateway"></option>
-            <option value="server" data-i18n="knxUltimateMultiRouting.properties.modeServer"></option>
+            <option value="gateway" data-i18n="knxSlimMultiRouting.properties.modeGateway"></option>
+            <option value="server" data-i18n="knxSlimMultiRouting.properties.modeServer"></option>
         </select>
     </div>
 
     <div class="form-row knxmr-row-gateway">
-        <label for="node-input-server"><i class="fa fa-tag"></i> <span data-i18n="knxUltimateMultiRouting.properties.server"></span></label>
+        <label for="node-input-server"><i class="fa fa-tag"></i> <span data-i18n="knxSlimMultiRouting.properties.server"></span></label>
         <input type="text" id="node-input-server">
     </div>
 
     <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="knxUltimateMultiRouting.properties.name"></span></label>
-        <input type="text" id="node-input-name" data-i18n="[placeholder]knxUltimateMultiRouting.properties.name" style="flex:1 1 240px; min-width:240px; max-width:240px;">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="knxSlimMultiRouting.properties.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]knxSlimMultiRouting.properties.name" style="flex:1 1 240px; min-width:240px; max-width:240px;">
     </div>
 
     <div class="form-row">
-        <label for="node-input-outputtopic"><i class="fa fa-tasks"></i> <span data-i18n="knxUltimateMultiRouting.properties.outputtopic"></span></label>
-        <input type="text" id="node-input-outputtopic" data-i18n="[placeholder]knxUltimateMultiRouting.properties.outputtopic">
+        <label for="node-input-outputtopic"><i class="fa fa-tasks"></i> <span data-i18n="knxSlimMultiRouting.properties.outputtopic"></span></label>
+        <input type="text" id="node-input-outputtopic" data-i18n="[placeholder]knxSlimMultiRouting.properties.outputtopic">
     </div>
 
     <div class="form-row">
         <input type="checkbox" id="node-input-dropIfSameGateway" style="display:inline-block; width:auto; vertical-align:top;">
-        <label style="width:auto" for="node-input-dropIfSameGateway">&nbsp;&nbsp;<span data-i18n="knxUltimateMultiRouting.properties.dropIfSameGateway"></span></label>
+        <label style="width:auto" for="node-input-dropIfSameGateway">&nbsp;&nbsp;<span data-i18n="knxSlimMultiRouting.properties.dropIfSameGateway"></span></label>
     </div>
 
     <div class="form-row">
         <input type="checkbox" id="node-input-respectRoutingCounter" style="display:inline-block; width:auto; vertical-align:top;">
-        <label style="width:auto" for="node-input-respectRoutingCounter">&nbsp;&nbsp;<span data-i18n="knxUltimateMultiRouting.properties.respectRoutingCounter"></span></label>
+        <label style="width:auto" for="node-input-respectRoutingCounter">&nbsp;&nbsp;<span data-i18n="knxSlimMultiRouting.properties.respectRoutingCounter"></span></label>
     </div>
 
     <div class="form-row">
         <input type="checkbox" id="node-input-decrementRoutingCounter" style="display:inline-block; width:auto; vertical-align:top;">
-        <label style="width:auto" for="node-input-decrementRoutingCounter">&nbsp;&nbsp;<span data-i18n="knxUltimateMultiRouting.properties.decrementRoutingCounter"></span></label>
+        <label style="width:auto" for="node-input-decrementRoutingCounter">&nbsp;&nbsp;<span data-i18n="knxSlimMultiRouting.properties.decrementRoutingCounter"></span></label>
     </div>
 
     <div class="form-row knxmr-row-tunnel">
         <hr/>
-        <b><span data-i18n="knxUltimateMultiRouting.properties.tunnelTitle"></span></b>
+        <b><span data-i18n="knxSlimMultiRouting.properties.tunnelTitle"></span></b>
     </div>
 
     <div class="form-row knxmr-row-tunnel">
-        <label for="node-input-tunnelListenHost"><i class="fa fa-globe"></i> <span data-i18n="knxUltimateMultiRouting.properties.tunnelListenHost"></span></label>
+        <label for="node-input-tunnelListenHost"><i class="fa fa-globe"></i> <span data-i18n="knxSlimMultiRouting.properties.tunnelListenHost"></span></label>
         <input type="text" id="node-input-tunnelListenHost" placeholder="0.0.0.0">
     </div>
     <div class="form-row knxmr-row-tunnel">
-        <label for="node-input-tunnelListenPort"><i class="fa fa-plug"></i> <span data-i18n="knxUltimateMultiRouting.properties.tunnelListenPort"></span></label>
+        <label for="node-input-tunnelListenPort"><i class="fa fa-plug"></i> <span data-i18n="knxSlimMultiRouting.properties.tunnelListenPort"></span></label>
         <input type="text" id="node-input-tunnelListenPort" placeholder="3671">
     </div>
     <div class="form-row knxmr-row-tunnel">
-        <label for="node-input-tunnelAdvertiseHost"><i class="fa fa-bullhorn"></i> <span data-i18n="knxUltimateMultiRouting.properties.tunnelAdvertiseHost"></span></label>
-        <input type="text" id="node-input-tunnelAdvertiseHost" data-i18n="[placeholder]knxUltimateMultiRouting.properties.tunnelAdvertiseHostPlaceholder">
+        <label for="node-input-tunnelAdvertiseHost"><i class="fa fa-bullhorn"></i> <span data-i18n="knxSlimMultiRouting.properties.tunnelAdvertiseHost"></span></label>
+        <input type="text" id="node-input-tunnelAdvertiseHost" data-i18n="[placeholder]knxSlimMultiRouting.properties.tunnelAdvertiseHostPlaceholder">
     </div>
     <div class="form-row knxmr-row-tunnel">
-        <label for="node-input-tunnelAssignedIndividualAddress"><i class="fa fa-id-card-o"></i> <span data-i18n="knxUltimateMultiRouting.properties.tunnelAssignedIndividualAddress"></span></label>
+        <label for="node-input-tunnelAssignedIndividualAddress"><i class="fa fa-id-card-o"></i> <span data-i18n="knxSlimMultiRouting.properties.tunnelAssignedIndividualAddress"></span></label>
         <input type="text" id="node-input-tunnelAssignedIndividualAddress" placeholder="15.15.255">
     </div>
     <div class="form-row knxmr-row-tunnel">
-        <label for="node-input-tunnelGatewayId"><i class="fa fa-tag"></i> <span data-i18n="knxUltimateMultiRouting.properties.tunnelGatewayId"></span></label>
-        <input type="text" id="node-input-tunnelGatewayId" data-i18n="[placeholder]knxUltimateMultiRouting.properties.tunnelGatewayIdPlaceholder">
+        <label for="node-input-tunnelGatewayId"><i class="fa fa-tag"></i> <span data-i18n="knxSlimMultiRouting.properties.tunnelGatewayId"></span></label>
+        <input type="text" id="node-input-tunnelGatewayId" data-i18n="[placeholder]knxSlimMultiRouting.properties.tunnelGatewayIdPlaceholder">
     </div>
     <div class="form-row knxmr-row-tunnel">
-        <label for="node-input-tunnelMaxSessions"><i class="fa fa-users"></i> <span data-i18n="knxUltimateMultiRouting.properties.tunnelMaxSessions"></span></label>
+        <label for="node-input-tunnelMaxSessions"><i class="fa fa-users"></i> <span data-i18n="knxSlimMultiRouting.properties.tunnelMaxSessions"></span></label>
         <input type="text" id="node-input-tunnelMaxSessions" placeholder="1">
     </div>
 </script>

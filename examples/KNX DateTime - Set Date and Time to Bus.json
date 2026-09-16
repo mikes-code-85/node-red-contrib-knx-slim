@@ -1,6 +1,6 @@
 [{
   "id": "dt_cfg_1",
-  "type": "knxUltimate-config",
+  "type": "knxSlim-config",
   "z": "",
   "host": "224.0.23.12",
   "port": "3671",
@@ -48,7 +48,7 @@
 },
 {
   "id": "dt_node",
-  "type": "knxUltimateDateTime",
+  "type": "knxSlimDateTime",
   "z": "flow_dt",
   "server": "dt_cfg_1",
   "name": "KNX Clock",
