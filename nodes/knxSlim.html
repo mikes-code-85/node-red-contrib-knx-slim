@@ -1,0 +1,1522 @@
+<!-- <script type="text/javascript" src="resources/node-red-contrib-knx-slim/jquery.searchableSelect.js"></script> -->
+
+<style>
+    /* Monaco editor - first area (input to bus): light green */
+    #sendMsgToKNXCode-editor .monaco-editor,
+    #sendMsgToKNXCode-editor .monaco-editor-background,
+    #sendMsgToKNXCode-editor .monaco-editor .margin,
+    #sendMsgToKNXCode-editor .monaco-editor .overflow-guard,
+    #sendMsgToKNXCode-editor .monaco-editor .lines-content,
+    #sendMsgToKNXCode-editor .monaco-editor .editor-scrollable {
+        background-color: #e8f5e9 !important;
+    }
+
+    /* Monaco editor - second area (bus to output): light yellow */
+    #receiveMsgFromKNXCode-editor .monaco-editor,
+    #receiveMsgFromKNXCode-editor .monaco-editor-background,
+    #receiveMsgFromKNXCode-editor .monaco-editor .margin,
+    #receiveMsgFromKNXCode-editor .monaco-editor .overflow-guard,
+    #receiveMsgFromKNXCode-editor .monaco-editor .lines-content,
+    #receiveMsgFromKNXCode-editor .monaco-editor .editor-scrollable {
+        background-color: #fffde7 !important;
+    }
+</style>
+
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/htmlUtils.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/KNXSendSnippets.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/KNXReceiveSnippets.js"></script>
+<script type="text/javascript" src="resources/node-red-contrib-knx-slim/knxFunctionAutocomplete.js"></script>
+
+<script type="text/javascript">
+    RED.nodes.registerType('knxSlim', {
+        category: "KNX Slim",
+        color: '#7dd484',
+        defaults: {
+            //buttonState: {value: true},
+            server: { type: "knxSlim-config", required: true },
+            topic: { value: "" },
+            setTopicType: { value: "str" },
+            outputtopic: { value: "" },
+            dpt: { value: "" },
+            initialread: { value: 0 },
+            notifyreadrequest: { value: false },
+            notifyresponse: { value: false },
+            notifywrite: { value: true },
+            notifyreadrequestalsorespondtobus: { value: false },
+            notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized: { value: "0" },
+            name: { value: "" },
+            outputtype: { value: "write" },
+            outputRBE: { value: "true" },
+            inputRBE: { value: "false" },
+            formatmultiplyvalue: { value: 1 },
+            formatnegativevalue: { value: "leave" },
+            formatdecimalsvalue: { value: 999 },
+            passthrough: { value: "no" },
+            sendMsgToKNXCode: { value: "" },
+            receiveMsgFromKNXCode: { value: "" },
+            listenallga: { value: "" },
+            gaSecure: { value: false },
+            buttonEnabled: { value: true },
+            buttonMode: { value: "toggle" },
+            buttonStaticValue: { value: "" },
+            buttonToggleInitial: { value: "false" },
+            periodicSend: { value: false },
+            periodicSendInterval: { value: 60 }
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: function () {
+            try {
+                return (this.gaSecure === true || this.gaSecure === 'true') ? "node-knx-icon-secure.svg" : "node-knx-icon.svg";
+            } catch (e) {
+                return "node-knx-icon.svg";
+            }
+        },
+        label: function () {
+            const functionSendMsgToKNXCode = (this.sendMsgToKNXCode !== undefined && this.sendMsgToKNXCode !== '') ? "f(x) " : "";
+            const functionreceiveMsgFromKNXCode = (this.receiveMsgFromKNXCode !== undefined && this.receiveMsgFromKNXCode !== '') ? " f(x)" : "";
+            return ((this.outputRBE === "true" || this.outputRBE === true) ? "|rbe| " : "") + functionSendMsgToKNXCode + (this.name || this.topic || "KNX Device") + (this.setTopicType === 'str' || this.setTopicType === undefined ? '' : ' [' + (this.setTopicType === 'listenAllGA' ? 'Universal' : this.setTopicType) + ']') + functionreceiveMsgFromKNXCode + ((this.inputRBE === "true" || this.inputRBE === true) ? " |rbe|" : "")
+        },
+        paletteLabel: "KNX DEVICE",
+        button: {
+            enabled: function () {
+                return !this.changed;
+            },
+            visible: function () {
+                const isUniversal = this.setTopicType === 'listenAllGA' || this.listenallga === true || this.listenallga === 'true';
+                if (isUniversal) return false;
+                return this.buttonEnabled === true || this.buttonEnabled === "true";
+            },
+            onclick: function () {
+                const node = this;
+                const mode = node.buttonMode || 'toggle';
+                const request = { id: node.id, mode };
+                if (mode === 'value') {
+                    request.value = node.buttonStaticValue;
+                }
+                $.ajax({
+                    type: "POST",
+                    url: "knxSlim/buttonAction",
+                    data: request,
+                    success: function (response) {
+                        const key = mode === 'read' ? "manualReadOk" : "manualWriteOk";
+                        const baseMessage = RED._("node-red-contrib-knx-slim/knxSlim:knxSlim." + key) || "KNX command sent";
+                        let notifyMessage = baseMessage;
+                        if (mode !== 'read') {
+                            let payloadValue;
+                            if (response && Object.prototype.hasOwnProperty.call(response, 'payload')) {
+                                payloadValue = response.payload;
+                            } else if (mode === 'value' && Object.prototype.hasOwnProperty.call(request, 'value')) {
+                                payloadValue = request.value;
+                            }
+                            if (payloadValue !== undefined) {
+                                let payloadText;
+                                if (typeof payloadValue === 'object') {
+                                    try {
+                                        payloadText = JSON.stringify(payloadValue);
+                                    } catch (error) {
+                                        payloadText = String(payloadValue);
+                                    }
+                                } else {
+                                    payloadText = String(payloadValue);
+                                }
+                                const payloadLabel = RED._("node-red:common.label.payload") || "payload";
+                                notifyMessage = `${baseMessage} (${payloadLabel}: ${payloadText})`;
+                            }
+                        }
+                        RED.notify(notifyMessage, "success");
+                    },
+                    error: function (xhr) {
+                        let message;
+                        if (xhr && xhr.responseJSON && xhr.responseJSON.error) {
+                            message = xhr.responseJSON.error;
+                        }
+                        const key = mode === 'read' ? "manualReadError" : "manualWriteError";
+                        RED.notify(message || (RED._("node-red-contrib-knx-slim/knxSlim:knxSlim." + key) || "Unable to send KNX command"), "error");
+                    }
+                });
+            }
+        },
+        oneditprepare: function () {
+            // Go to the help panel
+            try {
+                RED.sidebar.show("help");
+            } catch (error) { }
+
+            try {
+                $("#node-input-topic").data('knxGaAutocomplete', true);
+                $("#node-input-knxFunctionHelperGAList").data('knxGaAutocomplete', true);
+            } catch (error) { }
+
+
+            var node = this;
+            let topicPickerMouseDown = false;
+            if ($("#node-input-server").val() === "_ADD_") {
+                // Node-Red 4.0.x has a bug not selecting the default server node
+                try {
+                    $("#node-input-server").prop("selectedIndex", 0);
+                } catch (error) {
+                }
+            }
+            var oNodeServer = RED.nodes.node($("#node-input-server").val()); // Store the config-node
+            const $buttonEnabled = $('#node-input-buttonEnabled');
+            const $buttonOptions = $('#knx-button-options');
+            const $buttonMode = $('#node-input-buttonMode');
+            const $buttonToggleInitial = $('#node-input-buttonToggleInitial');
+            const $buttonStaticValue = $('#node-input-buttonStaticValue');
+            const $buttonToggleRow = $('.knx-button-toggle-row');
+            const $buttonValueRow = $('.knx-button-value-row');
+
+            const coerceBoolean = (value) => (value === true || value === 'true');
+
+            $buttonEnabled.prop('checked', coerceBoolean(node.buttonEnabled));
+            $buttonMode.val(node.buttonMode || 'toggle');
+            $buttonToggleInitial.val(coerceBoolean(node.buttonToggleInitial) ? 'true' : 'false');
+            $buttonStaticValue.val(node.buttonStaticValue || '');
+
+            const isRawDptSelected = () => String($("#node-input-dpt").val() || '').trim().toLowerCase() === 'raw';
+
+            const refreshButtonOptions = () => {
+                const enabled = $buttonEnabled.prop('checked');
+                const rawMode = isRawDptSelected();
+                let mode = $buttonMode.val() || 'toggle';
+                if (rawMode && mode === 'toggle') {
+                    mode = 'value';
+                    $buttonMode.val('value');
+                }
+                $buttonMode.find("option[value='toggle']").prop('disabled', rawMode);
+                if (enabled) {
+                    $buttonOptions.show();
+                } else {
+                    $buttonOptions.hide();
+                }
+                $buttonToggleRow.toggle(enabled && !rawMode && mode === 'toggle');
+                $buttonValueRow.toggle(enabled && mode === 'value');
+
+                node.buttonEnabled = enabled;
+                node.buttonMode = mode;
+                node.buttonToggleInitial = $buttonToggleInitial.val();
+                node.buttonStaticValue = $buttonStaticValue.val();
+            };
+
+            const refreshRawModeUI = () => {
+                const rawMode = isRawDptSelected();
+                const isUniversal = $("#node-input-setTopicType").val() === 'listenAllGA';
+
+                if (isUniversal) {
+                    refreshButtonOptions();
+                    return;
+                }
+
+                if (rawMode) {
+                    $("#divOutputRBE").hide();
+                    $("#node-input-outputRBE").val("false");
+                    $("#divInputRBE").hide();
+                    $("#node-input-inputRBE").val("false");
+                    $("#divPeriodicSend").hide();
+                    $("#divPeriodicSendInterval").hide();
+                    $("#node-input-periodicSend").prop('checked', false);
+                    $("#divnotifyreadrequestautoreact").hide();
+                    $("#node-input-notifyreadrequestalsorespondtobus").prop('checked', false);
+                    $("#divFormatSectionHeader").hide();
+                    $("#divFormatMultiply").hide();
+                    $("#divFormatDecimals").hide();
+                    $("#divFormatNegative").hide();
+                } else {
+                    $("#divOutputRBE").show();
+                    $("#divInputRBE").show();
+                    $("#divPeriodicSend").show();
+                    $("#divFormatSectionHeader").show();
+                    $("#divFormatMultiply").show();
+                    $("#divFormatDecimals").show();
+                    $("#divFormatNegative").show();
+                    if ($("#node-input-periodicSend").is(':checked')) {
+                        $("#divPeriodicSendInterval").show();
+                    } else {
+                        $("#divPeriodicSendInterval").hide();
+                    }
+                    if ($("#node-input-notifyreadrequest").is(":checked")) {
+                        $("#divnotifyreadrequestautoreact").show();
+                    } else {
+                        $("#divnotifyreadrequestautoreact").hide();
+                    }
+                }
+
+                refreshButtonOptions();
+            };
+
+            $buttonEnabled.on('change', refreshButtonOptions);
+            $buttonMode.on('change', refreshButtonOptions);
+            $buttonToggleInitial.on('change', refreshButtonOptions);
+            $buttonStaticValue.on('change keyup', function () {
+                node.buttonStaticValue = $(this).val();
+            });
+
+            refreshButtonOptions();
+            // Secure GA cache from keyring
+            let secureGAs = new Set();
+            function refreshSecureGAs() {
+                try {
+                    const sid = $("#node-input-server").val();
+                    if (!sid || sid === '_ADD_') { secureGAs = new Set(); return; }
+                    $.getJSON("knxSlimKeyringDataSecureGAs?serverId=" + sid + "&_=" + new Date().getTime(), (data) => {
+                        try {
+                            const set = new Set();
+                            if (Array.isArray(data)) data.forEach(ga => { if (typeof ga === 'string') set.add(ga); });
+                            secureGAs = set;
+                        } catch (e) { secureGAs = new Set(); }
+                    }).fail(function () { secureGAs = new Set(); });
+                } catch (error) { secureGAs = new Set(); }
+            }
+            $("#tabs").tabs();
+
+            // 15/09/2020 Supergiovane, set the help sample based on Datapoint
+            const knxFunctionHelperItems = [
+                {
+                    id: 'getGAValue',
+                    label: 'getGAValue(address, dpt?, readIfMissing?)',
+                    aceValue: "await getGAValue('1/1/1', '1.001', false)",
+                    snippet: "await getGAValue('${1:1/1/1}', '${2:1.001}', ${3:false})",
+                    doc: 'Read another group address. This helper is async, so use await to get the real value. By default, if the value is not cached, a KNX read is sent. Pass false as third parameter to use cache-only mode.'
+                },
+                {
+                    id: 'setGAValue',
+                    label: 'setGAValue(address, value, dpt?)',
+                    aceValue: "setGAValue('1/1/1', true)",
+                    snippet: "setGAValue('${1:1/1/1}', ${2:true}, '${3:1.001}')",
+                    doc: 'Send a value to any KNX group address. The datapoint is optional when the ETS file is imported.'
+                },
+                {
+                    id: 'self',
+                    label: 'self(value)',
+                    aceValue: 'self(false)',
+                    snippet: 'self(${1:false})',
+                    doc: 'Set this node value and forward it to the KNX bus.'
+                },
+                {
+                    id: 'toggle',
+                    label: 'toggle()',
+                    aceValue: 'toggle()',
+                    snippet: 'toggle()',
+                    doc: 'Invert this node value and write it to the KNX bus.'
+                }
+            ];
+            const globalScope = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+            const rawDptOption = { value: 'raw', text: 'raw Raw telegram (no decode)' }
+
+            function appendRawDptOption($select) {
+                if (!$select || !$select.length) return
+                if ($select.find("option[value='raw']").length > 0) return
+                $select.prepend($("<option></option>")
+                    .attr("value", rawDptOption.value)
+                    .text(rawDptOption.text))
+            }
+
+            function knxSlimDptsGetHelp(_dpt, _forceClose) {
+                const detailsContainer = $("#dptDetailsContainer")
+                if (_forceClose === true) {
+                    detailsContainer.hide()
+                }
+                const serverId = $("#node-input-server").val()
+                if (serverId === "_ADD_" || serverId === '' || _dpt === null || _dpt === '') return
+                if (String(_dpt).trim().toLowerCase() === 'raw') {
+                    const helplinkContainer = $("#sampleCodeEditor")
+                    try {
+                        if (node.sampleEditor) {
+                            node.sampleEditor.destroy()
+                            delete node.sampleEditor
+                        }
+                    } catch (error) { }
+                    $("#example-editor").empty()
+                    helplinkContainer.empty()
+                    node.sampleEditor = RED.editor.createEditor({
+                        id: 'example-editor',
+                        mode: 'ace/mode/javascript',
+                        value: `// KNX-Slim set as RAW NODE
+// Incoming telegrams skip datapoint decoding.
+// msg.payload will be null and the raw telegram bytes are available in msg.knx.rawValue.
+// For outgoing telegrams, use msg.writeraw = Buffer.from("0730", "hex")
+// and optionally msg.bitlength for 1-bit / 2-bit / 4-bit datapoints.
+return msg;`
+                    })
+                    try {
+                        node.sampleEditor.setReadOnly(true)
+                        node.sampleEditor.setShowPrintMargin(false)
+                    } catch (error) { }
+                    $("<div>", {
+                        class: "dpt-details-link"
+                    })
+                        .append($("<span>").text("RAW mode keeps the telegram undecoded and exposes the bytes in "))
+                        .append($("<code>").text("msg.knx.rawValue"))
+                        .append($("<span>").text("."))
+                        .appendTo(helplinkContainer)
+                    return
+                }
+                $.getJSON("knxSlimDptsGetHelp?dpt=" + _dpt + "&serverId=" + serverId + "&" + { _: new Date().getTime() }, (data) => {
+                    const helplinkContainer = $("#sampleCodeEditor")
+                    try {
+                        if (node.sampleEditor) {
+                            node.sampleEditor.destroy()
+                            delete node.sampleEditor
+                        }
+                    } catch (error) { }
+                    $("#example-editor").empty()
+                    helplinkContainer.empty()
+
+                    const translate = (key, opts) => {
+                        try {
+                            if (typeof RED !== 'undefined' && RED._) {
+                                return RED._(key, opts)
+                            }
+                        } catch (error) { }
+                        return null
+                    }
+
+                    const noSampleText = translate('knxSlim.dptDetails.noSample') || 'Currently, no sample payload is available.'
+                    const createEditor = (value) => {
+                        node.sampleEditor = RED.editor.createEditor({
+                            id: 'example-editor',
+                            mode: 'ace/mode/javascript',
+                            value
+                        })
+                        try {
+                            node.sampleEditor.setReadOnly(true)
+                            node.sampleEditor.setShowPrintMargin(false)
+                        } catch (error) { }
+                    }
+
+                    try {
+                        const hasHelp = data.help !== 'NO'
+                        if (hasHelp) {
+                            createEditor(data.help)
+                            if (data.helplink) {
+                                const label = translate('Detail', { dpt: _dpt }) || ('More details for ' + _dpt)
+                                helplinkContainer.html(`&nbsp;<i class="fa fa-question-circle"></i>&nbsp;<a target="_blank" href="${data.helplink}"><u>${label}</u></a>`)
+                            }
+                        } else {
+                            createEditor(noSampleText)
+                            if (data.helplink) {
+                                const labelWiki = translate('Wiki') || 'Open wiki'
+                                helplinkContainer.html(`&nbsp;<i class="fa fa-question-circle"></i>&nbsp;<a target="_blank" href="${data.helplink}"><u>${labelWiki}</u></a>`)
+                            }
+                        }
+                    } catch (error) { }
+
+                    if (detailsContainer.is(':visible') && node.sampleEditor) {
+                        setTimeout(() => { try { node.sampleEditor.resize(true) } catch (error) { } }, 0)
+                    }
+                })
+            }
+
+            let groupAddressRequest = null;
+            let groupAddressServerId = null;
+            let functionEditorsDisposed = false;
+            const functionEditorDisposables = [];
+            const loadFunctionGroupAddresses = () => {
+                const serverId = $("#node-input-server").val();
+                if (functionEditorsDisposed || !serverId || serverId === '_ADD_') return Promise.resolve([]);
+                if (!groupAddressRequest || groupAddressServerId !== serverId) {
+                    groupAddressServerId = serverId;
+                    groupAddressRequest = new Promise(resolve => {
+                        $.getJSON("knxSlimcsv?nodeID=" + encodeURIComponent(serverId))
+                            .done(data => resolve(Array.isArray(data) ? data : []))
+                            .fail(() => { groupAddressRequest = null; resolve([]); });
+                    });
+                }
+                return groupAddressRequest.then(data => {
+                    return !functionEditorsDisposed && $("#node-input-server").val() === serverId ? data : [];
+                });
+            };
+            node.disposeKnxFunctionEditors = () => {
+                functionEditorsDisposed = true;
+                functionEditorDisposables.forEach(disposable => disposable.dispose());
+                ['sampleEditor', 'sendMsgToKNXCodeEditor', 'receiveMsgFromKNXCodeEditor'].forEach(key => {
+                    try { if (node[key]) node[key].destroy(); } catch (error) { }
+                    delete node[key];
+                });
+                delete node.activeCodeEditor;
+                delete node.disposeKnxFunctionEditors;
+            };
+
+            const applyEditorOptions = (editor) => {
+                try {
+                    if (!editor) return;
+                    if (typeof editor.updateOptions === 'function') {
+                        editor.updateOptions({ lineNumbers: 'off', minimap: { enabled: false }, scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 } });
+                    } else if (editor.renderer && typeof editor.renderer.setShowGutter === 'function') {
+                        editor.renderer.setShowGutter(false);
+                    }
+                    if (typeof editor.setShowPrintMargin === 'function') editor.setShowPrintMargin(false);
+                    if (typeof ace !== 'undefined' && ace.require) {
+                        try { ace.require('ace/ext/language_tools'); } catch (error) { }
+                    }
+                    if (typeof editor.setOptions === 'function') {
+                        editor.setOptions({
+                            enableBasicAutocompletion: true,
+                            enableLiveAutocompletion: true
+                        });
+                    }
+                    functionEditorDisposables.push(globalScope.KNXSlimFunctionAutocomplete.attach(editor, {
+                        monaco: typeof monaco !== 'undefined' ? monaco : null,
+                        ace: typeof ace !== 'undefined' ? ace : null,
+                        loadGroupAddresses: loadFunctionGroupAddresses,
+                        helperItems: knxFunctionHelperItems
+                    }));
+                    if (typeof monaco !== 'undefined' && !globalScope.knxFunctionMonacoGlobals) {
+                        try {
+                            globalScope.knxFunctionMonacoGlobals = true;
+                            monaco.languages.typescript.javascriptDefaults.addExtraLib([
+                                '/** Read a KNX group address. This helper is async, so use await to get the real value. By default, if the value is not cached, a KNX read is sent. Pass false as third parameter to use cache-only mode. */',
+                                'declare function getGAValue(address: string, dptOrReadIfMissing?: string | boolean, readIfMissing?: boolean): Promise<any>;',
+                                '/** Send a value to a KNX group address. */',
+                                'declare function setGAValue(address: string, value: any, dpt?: string): void;',
+                                '/** Toggle (invert) this node\'s current value on the KNX bus. */',
+                                'declare function toggle(): void;',
+                            ].join('\n'), 'knx-slim-globals.d.ts');
+                            monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+                                noSemanticValidation: true,
+                                noSyntaxValidation: false
+                            });
+                        } catch (error) { }
+                    }
+                } catch (error) { }
+            };
+
+            const highlightEditor = (editor, active) => {
+                if (!editor) return;
+                try {
+                    if (editor.renderer && editor.renderer.scroller) {
+                        editor.renderer.scroller.style.backgroundColor = active ? '#e6ffe6' : '';
+                    }
+                    if (editor.renderer && editor.renderer.content) {
+                        editor.renderer.content.style.backgroundColor = active ? '#e6ffe6' : '';
+                    }
+                    if (typeof editor.getDomNode === 'function') {
+                        const dom = editor.getDomNode();
+                        if (dom) dom.style.backgroundColor = active ? '#e6ffe6' : '';
+                    } else if (editor.container) {
+                        editor.container.style.backgroundColor = active ? '#e6ffe6' : '';
+                    }
+                } catch (error) { }
+            };
+
+            const attachFocusHandlers = (editor) => {
+                if (!editor) return;
+                try {
+                    if (typeof editor.on === 'function' && editor.renderer) {
+                        editor.on('focus', () => { node.activeCodeEditor = editor; highlightEditor(editor, true); });
+                        editor.on('blur', () => highlightEditor(editor, false));
+                    } else if (typeof editor.onDidFocusEditorWidget === 'function') {
+                        editor.onDidFocusEditorWidget(() => { node.activeCodeEditor = editor; highlightEditor(editor, true); });
+                        if (typeof editor.onDidBlurEditorWidget === 'function') {
+                            editor.onDidBlurEditorWidget(() => highlightEditor(editor, false));
+                        }
+                    }
+                } catch (error) { }
+            };
+
+            const sanitizeAutocompleteValue = (raw) => {
+                if (typeof raw !== 'string') return '';
+                return raw.replace(/['"]/g, '').trim();
+            };
+            const replaceLiteralAroundCursorAce = (editor, text) => {
+                try {
+                    const AceRange = (typeof ace !== 'undefined' && ace.require) ? ace.require('ace/range').Range : null;
+                    if (!AceRange) return false;
+                    const pos = editor.getCursorPosition();
+                    const line = editor.session.getLine(pos.row) || '';
+                    let left = pos.column - 1;
+                    while (left >= 0 && line[left] !== "'") left--;
+                    if (left < 0) return false;
+                    let right = pos.column;
+                    while (right < line.length && line[right] !== "'") right++;
+                    if (right >= line.length) return false;
+                    const newLiteral = "'" + text + "'";
+                    const range = new AceRange(pos.row, left, pos.row, right + 1);
+                    editor.session.replace(range, newLiteral);
+                    editor.moveCursorTo(pos.row, left + newLiteral.length);
+                    return true;
+                } catch (error) { }
+                return false;
+            };
+            const replaceLiteralAroundCursorMonaco = (editor, text) => {
+                try {
+                    const position = editor.getPosition();
+                    if (!position) return false;
+                    const model = typeof editor.getModel === 'function' ? editor.getModel() : null;
+                    if (!model) return false;
+                    const lineContent = model.getLineContent(position.lineNumber) || '';
+                    let leftIdx = position.column - 2;
+                    if (leftIdx >= lineContent.length) leftIdx = lineContent.length - 1;
+                    while (leftIdx >= 0 && lineContent[leftIdx] !== "'") leftIdx--;
+                    if (leftIdx < 0) return false;
+                    let rightIdx = position.column - 1;
+                    if (rightIdx < leftIdx) rightIdx = leftIdx + 1;
+                    while (rightIdx < lineContent.length && lineContent[rightIdx] !== "'") rightIdx++;
+                    if (rightIdx >= lineContent.length) return false;
+                    const newLiteral = "'" + text + "'";
+                    const range = new monaco.Range(
+                        position.lineNumber,
+                        leftIdx + 1,
+                        position.lineNumber,
+                        rightIdx + 2
+                    );
+                    editor.executeEdits('knxInsertGA', [{ range, text: newLiteral, forceMoveMarkers: true }]);
+                    editor.setPosition({ lineNumber: position.lineNumber, column: leftIdx + 1 + newLiteral.length });
+                    return true;
+                } catch (error) { }
+                return false;
+            };
+
+            const insertTextIntoEditor = (editor, text) => {
+                if (!editor || !text) return;
+                try {
+                    if (editor.session && typeof editor.session.insert === 'function') {
+                        editor.focus();
+                        const selectionRange = editor.getSelection && typeof editor.getSelectionRange === 'function'
+                            ? editor.getSelectionRange()
+                            : null;
+                        if (selectionRange && !selectionRange.isEmpty()) {
+                            editor.session.replace(selectionRange, text);
+                            return;
+                        }
+                        const replaced = replaceLiteralAroundCursorAce(editor, text);
+                        if (!replaced) {
+                            const pos = editor.getCursorPosition();
+                            editor.session.insert(pos, text);
+                        }
+                        return;
+                    }
+                    if (typeof editor.executeEdits === 'function' && typeof editor.getPosition === 'function' && typeof monaco !== 'undefined') {
+                        const selection = typeof editor.getSelection === 'function' ? editor.getSelection() : null;
+                        const hasSelection = selection && (selection.startLineNumber !== selection.endLineNumber || selection.startColumn !== selection.endColumn);
+                        if (selection && hasSelection) {
+                            const selectionRange = new monaco.Range(
+                                selection.startLineNumber,
+                                selection.startColumn,
+                                selection.endLineNumber,
+                                selection.endColumn
+                            );
+                            editor.executeEdits('knxInsertGA', [{ range: selectionRange, text, forceMoveMarkers: true }]);
+                            const targetLine = selectionRange.startLineNumber;
+                            const targetColumn = selectionRange.startColumn + text.length;
+                            editor.setPosition({ lineNumber: targetLine, column: targetColumn });
+                            editor.focus();
+                            return;
+                        }
+                        const position = editor.getPosition();
+                        if (!position) return;
+                        let replaced = replaceLiteralAroundCursorMonaco(editor, text);
+                        if (!replaced) {
+                            const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
+                            const newColumn = position.column + text.length;
+                            editor.executeEdits('knxInsertGA', [{ range, text, forceMoveMarkers: true }]);
+                            editor.setPosition({ lineNumber: position.lineNumber, column: newColumn });
+                        }
+                        editor.focus();
+                    }
+                } catch (error) { }
+            };
+
+            node.sendMsgToKNXCodeEditor = RED.editor.createEditor({
+                id: 'sendMsgToKNXCode-editor',
+                mode: 'ace/mode/nrjavascript',
+                value: node.sendMsgToKNXCode
+            });
+            applyEditorOptions(node.sendMsgToKNXCodeEditor);
+            node.receiveMsgFromKNXCodeEditor = RED.editor.createEditor({
+                id: 'receiveMsgFromKNXCode-editor',
+                mode: 'ace/mode/nrjavascript',
+                value: node.receiveMsgFromKNXCode
+            });
+            applyEditorOptions(node.receiveMsgFromKNXCodeEditor);
+            if (typeof monaco !== 'undefined') {
+                try {
+                    if (!globalScope._knxEditorThemesDefined) {
+                        monaco.editor.defineTheme('knx-send-theme', {
+                            base: 'vs', inherit: true, rules: [],
+                            colors: { 'editor.background': '#e8f5e9', 'editorGutter.background': '#e8f5e9' }
+                        });
+                        monaco.editor.defineTheme('knx-receive-theme', {
+                            base: 'vs', inherit: true, rules: [],
+                            colors: { 'editor.background': '#fffde7', 'editorGutter.background': '#fffde7' }
+                        });
+                        globalScope._knxEditorThemesDefined = true;
+                    }
+                    if (typeof node.sendMsgToKNXCodeEditor.updateOptions === 'function') {
+                        node.sendMsgToKNXCodeEditor.updateOptions({ theme: 'knx-send-theme' });
+                    }
+                    if (typeof node.receiveMsgFromKNXCodeEditor.updateOptions === 'function') {
+                        node.receiveMsgFromKNXCodeEditor.updateOptions({ theme: 'knx-receive-theme' });
+                    }
+                } catch (e) { }
+            }
+            node.activeCodeEditor = null;
+            attachFocusHandlers(node.sendMsgToKNXCodeEditor);
+            attachFocusHandlers(node.receiveMsgFromKNXCodeEditor);
+
+            $("#btn-insert-knxFunctionGA").off('click').on('click', function () {
+                const rawValue = $("#node-input-knxFunctionHelperGAList").val();
+                if (!rawValue || rawValue.trim() === '') {
+                    $("#node-input-knxFunctionHelperGAList").focus();
+                    return;
+                }
+                const sanitizedValue = sanitizeAutocompleteValue(rawValue);
+                const editor = node.activeCodeEditor || node.sendMsgToKNXCodeEditor || node.receiveMsgFromKNXCodeEditor;
+                if (!editor) return;
+                if (!sanitizedValue) return;
+                insertTextIntoEditor(editor, sanitizedValue);
+            });
+
+            const $knxFunctionHelperInput = $("#node-input-knxFunctionHelperGAList");
+            const $knxFunctionHelperInsertButton = $("#btn-insert-knxFunctionGA");
+            let knxFunctionHelperDefaultPlaceholder = $knxFunctionHelperInput.attr('placeholder') || '';
+            if (!knxFunctionHelperDefaultPlaceholder) {
+                try {
+                    knxFunctionHelperDefaultPlaceholder = RED._("node-red-contrib-knx-slim/knxSlim:knxSlim.placeholder.search") || '';
+                } catch (error) { }
+            }
+            const knxFunctionHelperNoEtsPlaceholder = 'To enable the search, IMPORT THE ETS FILE';
+            const refreshKnxFunctionHelperState = (hasEtsCsv) => {
+                $("#divknxFunctionHelperGAList").show();
+                $knxFunctionHelperInput.prop('disabled', !hasEtsCsv);
+                $knxFunctionHelperInsertButton.prop('disabled', !hasEtsCsv);
+                if (hasEtsCsv) {
+                    $knxFunctionHelperInput.attr('placeholder', knxFunctionHelperDefaultPlaceholder);
+                } else {
+                    $knxFunctionHelperInput.val('');
+                    $knxFunctionHelperInput.attr('placeholder', knxFunctionHelperNoEtsPlaceholder);
+                }
+            };
+
+            const configureSnippetPicker = (snippets, inputSelector, datalistSelector, applySnippet) => {
+                const inputEl = $(inputSelector)
+                const datalistEl = $(datalistSelector)
+                if (!inputEl.length || !datalistEl.length) return
+                const items = Array.isArray(snippets) ? snippets.slice() : []
+                const translate = key => {
+                    try {
+                        if (typeof RED !== 'undefined' && RED._) {
+                            return RED._(key)
+                        }
+                    } catch (error) { }
+                    return null
+                }
+
+                const populate = () => {
+                    datalistEl.empty()
+                    if (!items.length) {
+                        inputEl.val('')
+                        inputEl.prop('disabled', true)
+                        const emptyPlaceholder = inputEl.data('empty') || translate('knxSlim.snippets.emptyPlaceholder') || ''
+                        inputEl.attr('placeholder', emptyPlaceholder)
+                        return
+                    }
+                    inputEl.prop('disabled', false)
+                    const defaultPlaceholder = inputEl.data('placeholder') || translate('knxSlim.snippets.searchPlaceholder') || ''
+                    inputEl.attr('placeholder', defaultPlaceholder)
+                    items.forEach(snippet => {
+                        const opt = document.createElement('option')
+                        opt.value = snippet.title || snippet.id || 'Snippet'
+                        datalistEl.append(opt)
+                    })
+                }
+
+                populate()
+
+                const applySelectedSnippet = value => {
+                    if (!value) return
+                    const snippet = items.find(sn => (sn.title || sn.id) === value)
+                    if (!snippet) return
+                    applySnippet(snippet)
+                    inputEl.val('')
+                }
+
+                inputEl.on('change', function () {
+                    applySelectedSnippet($(this).val())
+                })
+
+                inputEl.on('keydown', function (evt) {
+                    if (evt.key === 'Enter') {
+                        evt.preventDefault()
+                        applySelectedSnippet($(this).val())
+                    }
+                })
+            }
+
+            configureSnippetPicker(window.KNXSendSnippets || [], '#sendSnippetPicker', '#sendSnippetOptions', snippet => {
+                node.sendMsgToKNXCodeEditor.session.setValue(snippet.code || '')
+            })
+            configureSnippetPicker(window.KNXReceiveSnippets || [], '#receiveSnippetPicker', '#receiveSnippetOptions', snippet => {
+                node.receiveMsgFromKNXCodeEditor.session.setValue(snippet.code || '')
+            })
+
+            const dptDetailsContainer = $('#dptDetailsContainer')
+            $('#toggleDptDetails').on('click', function (evt) {
+                evt.preventDefault()
+                if (!dptDetailsContainer.length) return
+                dptDetailsContainer.stop(true, true).slideToggle(200, function () {
+                    if (dptDetailsContainer.is(':visible') && node.sampleEditor) {
+                        try { node.sampleEditor.resize(true) } catch (error) { }
+                    }
+                })
+            })
+
+            function checkUI() {
+                groupAddressRequest = null;
+
+                // Backward compatibility
+                if (node.outputRBE === true || $("#node-input-outputRBE").val() === true) {
+                    node.outputRBE = 'true';
+                    $("#node-input-outputRBE").val("true")
+                }
+                if (node.outputRBE === undefined || node.outputRBE === false || $("#node-input-outputRBE").val() === false) {
+                    node.outputRBE = 'false';
+                    $("#node-input-outputRBE").val("false")
+                }
+                if (node.inputRBE === true || $("#node-input-inputRBE").val() === true) {
+                    node.inputRBE = 'true';
+                    $("#node-input-inputRBE").val("true")
+                }
+                if (node.inputRBE === undefined || node.inputRBE === false || $("#node-input-inputRBE").val() === false) {
+                    node.inputRBE = 'false';
+                    $("#node-input-inputRBE").val("false")
+                }
+                if (node.passthrough === undefined) {
+                    node.passthrough = 'no';
+                    $("#node-input-passthrough").val("no")
+                }
+                if (node.initialread === undefined || node.initialread === false) {
+                    node.initialread = 0;
+                    $("#node-input-initialread").val(0)
+                }
+
+                oNodeServer = RED.nodes.node($("#node-input-server").val());
+                if (oNodeServer === undefined) {
+                    // Show the DEPLOY FIRST message
+                    $("#divDeployFirst").show();
+                    $("#divMain").hide();
+                } else {
+                    $("#divDeployFirst").hide();
+                    $("#divMain").show();
+                    try {
+                        if (typeof oNodeServer.csv !== "undefined" && oNodeServer.csv !== "") {
+                            $("#isETSFileLoaded").val("si");
+                        } else {
+                            $("#isETSFileLoaded").val("no");
+                        }
+                    } catch (error) {
+                        $("#isETSFileLoaded").val("no");
+                    }
+                    refreshKnxFunctionHelperState($("#isETSFileLoaded").val() === "si");
+                    if (oNodeServer.knxSecureSelected) {
+                        $("#divknxsecure").show();
+                    } else {
+                        $("#divknxsecure").hide();
+                    }
+
+                    if ($("#node-input-server").val() !== "_ADD_" && $("#node-input-server").val() !== '') {
+                        refreshSecureGAs();
+                        $.getJSON("knxSlimDpts?serverId=" + $("#node-input-server").val() + "&_=" + new Date().getTime(), (data) => {
+                            $("#node-input-dpt").empty();
+                            appendRawDptOption($("#node-input-dpt"));
+                            data.forEach(dpt => {
+                                $("#node-input-dpt").append($("<option></option>")
+                                    .attr("value", dpt.value)
+                                    .text(dpt.text))
+                            });
+                            if (node.dpt === undefined || node.dpt === '') node.dpt = '1.001'
+                            $("#node-input-dpt").val(node.dpt);
+                            // Load help sample
+                            knxSlimDptsGetHelp(node.dpt, true);
+                            refreshRawModeUI();
+                        })
+                    }
+
+                    // Add write and response as default for existing nodes like was default before
+                    if (node.notifywrite === undefined) {
+                        node.notifywrite = true
+                        node.notifyresponse = true
+                        $("#node-input-notifywrite").prop("checked", true)
+                        $("#node-input-notifyresponse").prop("checked", true)
+                    }
+
+                    // Add Write as default for existing clients output
+                    if (node.outputtype === undefined) {
+                        node.outputtype = "write"
+                        $("#node-input-outputtype").val("write")
+                    }
+
+                    $("#node-input-notifyreadrequest").on('change', function () {
+                        if (isRawDptSelected()) {
+                            $("#divnotifyreadrequestautoreact").hide();
+                        } else if ($("#node-input-notifyreadrequest").is(":checked")) {
+                            if ($("#node-input-setTopicType").val() === "listenAllGA") {
+                            } else {
+                                $("#divnotifyreadrequestautoreact").show();
+                            }
+                        } else {
+                            $("#divnotifyreadrequestautoreact").hide();
+                        }
+                    })
+
+                    $("#node-input-periodicSend").on('change', function () {
+                        if ($("#node-input-periodicSend").is(":checked")) {
+                            $("#divPeriodicSendInterval").show()
+                        } else {
+                            $("#divPeriodicSendInterval").hide()
+                        }
+                    })
+
+                    // Set the group address type
+                    if (node.setTopicType === undefined) {
+                        node.setTopicType = 'str';
+                        $("#node-input-setTopicType").val('str');
+                    }
+
+                    // KNX Function helper: search for a GA and devicename
+                    // ----------------------------------------------------------
+                    try {
+                        $("#node-input-knxFunctionHelperGAList").autocomplete('destroy');
+                        $("#node-input-knxFunctionHelperGAList").removeClass(); // Rimuove eventuali classi aggiunte dall'autocompletamento  
+                    } catch (error) { }
+                    $("#node-input-knxFunctionHelperGAList").off(); // Rimuovi tutti gli eventi associati
+                    $("#node-input-knxFunctionHelperGAList").val(''); // Pulisce il valore del campo di input, se necessario
+                    $("#node-input-knxFunctionHelperGAList").autocomplete({
+                        minLength: 0,
+                        source: function (request, response) {
+                            $.getJSON("knxSlimcsv?nodeID=" + oNodeServer.id + "&" + { _: new Date().getTime() }, (data) => {
+                                response($.map(data, function (value, key) {
+                                    var sSearch = (value.ga + " (" + value.devicename + ") DPT" + value.dpt);
+                                    if (htmlUtilsfullCSVSearch(sSearch, request.term)) {
+                                        return {
+                                            label: value.ga + " # " + value.devicename + " # " + value.dpt, // Label for Display
+                                            value: value.ga + " " + value.devicename // Value
+                                        }
+                                    } else {
+                                        return null;
+                                    }
+                                }));
+                            });
+                        }, select: function (event, ui) {
+                        }
+                    }).focus(function () {
+                        $(this).autocomplete('search', $(this).val() + 'exactmatch');
+                    });
+                    // ----------------------------------------------------------
+
+
+                    $("#node-input-setTopicType").on('change', function () {
+                        try {
+                            $("#divDatapointSelection").show();
+                            $("#node-input-topic").show();
+                            $("#node-input-topic").autocomplete('destroy');
+                            $("#node-input-topic").off(); // Rimuovi tutti gli eventi associati
+                            $("#node-input-topic").val(''); // Pulisce il valore del campo di input, se necessario
+                            $("#node-input-topic").prop('disabled', false); // Assicura che il campo non sia disabilitato
+                            $("#node-input-topic").removeClass(); // Rimuove eventuali classi aggiunte dall'autocompletamento                           
+                        } catch (error) {
+                        }
+                        if ($("#node-input-setTopicType").val() === 'str') {
+                            $("#node-input-topic").prop('placeholder', 'Select your GA');
+                            // Autocomplete suggestion with ETS csv File
+                            $("#node-input-topic").autocomplete({
+                                minLength: 0,
+                                source: function (request, response) {
+                                    $.getJSON("knxSlimcsv?nodeID=" + oNodeServer.id + "&" + { _: new Date().getTime() }, (data) => {
+                                        response($.map(data, function (value, key) {
+                                            var sSearch = (value.ga + " (" + value.devicename + ") DPT" + value.dpt);
+                                            if (htmlUtilsfullCSVSearch(sSearch, request.term)) {
+                                                const isSecure = secureGAs.has(value.ga);
+                                                return {
+                                                    label: value.ga + " # " + value.devicename + " # " + value.dpt,
+                                                    value: value.ga,
+                                                    ga: value.ga,
+                                                    devicename: value.devicename,
+                                                    dpt: value.dpt,
+                                                    isSecure: isSecure
+                                                }
+                                            } else {
+                                                return null;
+                                            }
+                                        }));
+                                    });
+                                }, select: function (event, ui) {
+                                    // Sets Datapoint and device name automatically
+                                    var sDevName = ui.item.devicename || '';
+                                    try { sDevName = sDevName.substr(sDevName.indexOf(")") + 1).trim(); } catch (error) { }
+                                    $('#node-input-name').val(sDevName);
+                                    var optVal = $("#node-input-dpt option:contains('" + (ui.item.dpt || '').trim() + "')").attr('value');
+                                    var $dptSelect = $("#node-input-dpt");
+                                    if (optVal !== undefined && optVal !== null) {
+                                        $dptSelect.val(optVal).trigger('change');
+                                    } else {
+                                        $dptSelect.trigger('change');
+                                    }
+                                    // Persist secure flag for dynamic icon
+                                    try {
+                                        $("#node-input-gaSecure").val(ui.item.isSecure ? 'true' : 'false');
+                                    } catch (e) { }
+                                    // Toggle shield near GA input
+                                    try {
+                                        if (ui.item.isSecure) {
+                                            $("#gaSecureShield").show();
+                                        } else {
+                                            $("#gaSecureShield").hide();
+                                        }
+                                    } catch (e) { }
+                                }
+                            }).on('mousedown.knxSlimTopicPicker', function () {
+                                topicPickerMouseDown = true;
+                            }).on('focus.knxSlimTopicPicker', function () {
+                                if (!topicPickerMouseDown) {
+                                    $(this).autocomplete('search', '');
+                                }
+                            }).on('click.knxSlimTopicPicker', function () {
+                                topicPickerMouseDown = false;
+                                const input = this;
+                                setTimeout(function () {
+                                    $(input).autocomplete('search', '');
+                                }, 0);
+                            }).on('blur.knxSlimTopicPicker', function () {
+                                topicPickerMouseDown = false;
+                            }).autocomplete("instance")._renderItem = function (ul, item) {
+                                const isSecure = !!item.isSecure;
+                                const colorStyle = isSecure ? 'color: green;' : '';
+                                const shield = isSecure ? '<i class="fa fa-shield"></i> ' : '';
+                                const label = `${shield}${item.ga || ''} # ${item.devicename || ''} # ${item.dpt || ''}`;
+                                return $("<li>").append(`<div style="${colorStyle}">${label}</div>`).appendTo(ul);
+                            };
+                            $("#divDatapointSelection").show();
+                            $("#divNode-input-initialread").show();
+                            refreshRawModeUI()
+                        } else if ($("#node-input-setTopicType").val() === 'listenAllGA') {
+                            $("#node-input-topic").hide();
+                            $("#divDatapointSelection").hide()
+                            $("#divOutputRBE").hide()
+                            $("#node-input-outputRBE").val("false")
+                            $("#divInputRBE").hide()
+                            $("#node-input-inputRBE").val("false")
+                            $("#divPeriodicSend").hide()
+                            $("#divPeriodicSendInterval").hide()
+                            $("#node-input-periodicSend").prop('checked', false)
+                            $("#divnotifyreadrequestautoreact").hide();
+                            $("#divTopic").hide()
+                            $("#divNode-input-initialread").hide();
+
+                            // Call a fake datapoint to load a sample "Universal Node"
+                            knxSlimDptsGetHelp("0.000", true); // 15/09/2020 Supergiovane, load sample help
+
+                        } else {
+
+                            // 15/09/2020 Supergiovane, load the help sample of the current datapoint
+                            knxSlimDptsGetHelp($("#node-input-dpt").val(), false); // 15/09/2020 Supergiovane, load sample help
+                            $("#divTopic").show()
+                            $("#divNode-input-initialread").show();
+                            refreshRawModeUI()
+
+                            $("#node-input-topic").prop('placeholder', $("#node-input-setTopicType").val());
+                            if ($("#node-input-topic").val() === '') $("#node-input-topic").val('MyVariable');
+                            $("#divDatapointSelection").hide();
+                        }
+                    });
+
+
+                    // Hide or show the GA and DPT fields if Notify on all Group Addresses is checked
+                    if (oNodeServer !== undefined && oNodeServer !== null) {
+                        if (oNodeServer.csv !== undefined && oNodeServer.csv !== "") {
+                            // There is a ETS csv file, show the init read option
+                            $("#divNode-input-initialread").show()
+                        } else {
+                            // 25/10/2019 Warn user that the node will node encode/decode datagram, if Listen All GA's if the config node doesn't contain the csv
+                            if ($("#node-input-setTopicType").val() === 'listenAllGA') {
+                                // There isn't a ETS csv file, hide and deselect the init read option
+                                $("#divNode-input-initialread").hide();
+                                $("#node-input-initialread").val(0);
+                            } else {
+                                $("#divNode-input-initialread").show()
+                            }
+                        }
+                    } else {
+                        $("#node-input-setTopicType").val('str')
+                        $("#divTopic").show()
+                        $("#divDatapointSelection").show()
+                        $("#divOutputRBE").show()
+                        $("#divInputRBE").show()
+                        $("#divNode-input-initialread").show()
+                    }
+
+                    // *****************************
+
+                    setTimeout(() => {
+                        if ($("#node-input-setTopicType").val() === 'listenAllGA') {
+                            // Call a fake datapoint to load a sample "Universal Node"
+                            knxSlimDptsGetHelp("0.000", true); // 15/09/2020 Supergiovane, load sample help
+                        }
+                    }, 300);
+
+                }
+            }
+
+            // 02/04/2020 Alert user about data type
+            // ###########################
+            $("#node-input-dpt").on("change", function (event) {
+                // Load help sample
+                knxSlimDptsGetHelp(event.target.value, false);
+                refreshRawModeUI();
+            });
+            // ###########################
+
+            // If KNX Function is populated, set focus on the KNX Function tab.
+            if (this.sendMsgToKNXCodeEditor.getValue() !== '' || this.receiveMsgFromKNXCodeEditor.getValue()) {
+                $("#tabs").tabs(
+                    { active: 1 }
+                );
+            }
+
+            // Backwart compatibility listenAllGA
+            if (node.listenallga === true) {
+                $("#node-input-setTopicType").val('listenAllGA');
+            }
+
+            // Periodic send UI sync (avoid triggering setTopicType change handler that clears fields)
+            try {
+                if ($("#node-input-setTopicType").val() === 'listenAllGA') {
+                    $("#divPeriodicSend").hide()
+                    $("#divPeriodicSendInterval").hide()
+                    $("#node-input-periodicSend").prop('checked', false)
+                } else {
+                    refreshRawModeUI()
+                }
+            } catch (e) { }
+
+            // 19/02/2020 Used to alert the user if the CSV file has not been loaded and to get the server sooner als deploy
+            // ###########################
+            $("#node-input-server").change(function () {
+                checkUI();
+            });
+            // ###########################
+
+            // Show GA shield on dialog open based on saved secure flag
+            try {
+                const initialSecure = (node.gaSecure === true || node.gaSecure === 'true');
+                if (initialSecure) {
+                    $("#gaSecureShield").show();
+                } else {
+                    $("#gaSecureShield").hide();
+                }
+            } catch (e) { }
+
+            refreshRawModeUI();
+
+        },
+        oneditsave: function () {
+            // Return to the info tab
+            try {
+                RED.sidebar.show("info");
+            } catch (error) { }
+
+            var node = this;
+            const cleanFunctionCode = window.KNXSlimFunctionAutocomplete.pruneUnusedGaComments;
+            this.sendMsgToKNXCode = cleanFunctionCode(this.sendMsgToKNXCodeEditor.getValue());
+            this.receiveMsgFromKNXCode = cleanFunctionCode(this.receiveMsgFromKNXCodeEditor.getValue());
+            if ($("#node-input-setTopicType").val() === "listenAllGA") {
+                this.listenallga = true;
+            } else {
+                this.listenallga = false;
+            }
+            //this.propertyType = $("#node-input-property").typedInput('type');
+
+            // 19/02/2020 Warn user that the node will node encode/decode datagram, if Listen All GA's if the config node doesn't contain the csv
+            if ($("#isETSFileLoaded").val() === "no") {
+                // Notify the user
+                if ($("#node-input-setTopicType").val() === 'listenAllGA') {
+                    var checkResult = node._("knxSlim.advanced.notify-NoETSFile");
+                    var myNotification = RED.notify(checkResult,
+                        {
+                            modal: true,
+                            fixed: true,
+                            type: 'error',
+                            buttons: [
+                                {
+                                    text: "OK",
+                                    click: function (e) {
+                                        myNotification.close();
+                                    }
+                                }]
+                        })
+                }
+                // $("#node-input-listenallga").prop("checked", false)
+                // $("#divOutputRBE").show()
+                // $("#divInputRBE").show()               
+            }
+
+            if (node.disposeKnxFunctionEditors) node.disposeKnxFunctionEditors();
+
+        },
+        oneditcancel: function () {
+            // Return to the info tab
+            try {
+                RED.sidebar.show("info");
+            } catch (error) { }
+
+            if (this.disposeKnxFunctionEditors) this.disposeKnxFunctionEditors();
+        }
+    })
+
+    // RED.events.on("nodes:change", function (node) {
+
+    //     checkUI();
+
+    // });
+
+</script>
+
+<script type="text/html" data-template-name="knxSlim">
+  <div class="form-row" style="margin-bottom:10px;">
+    <span style="color:#ff0000"><i class="fa fa-youtube"></i></span>&nbsp;<a target="_blank" href="https://www.youtube.com/playlist?list=PL9Yh1bjbLAYrU8PsVhW4xzEug2WtVFv3E"><b>KNX-Slim video tutorials (YouTube playlist)</b></a>
+  </div>
+
+    <!-- Setted by oneditprepare and used in oneditsave to warn user if no CSV file has been loaded -->
+<input id="isETSFileLoaded" name="isETSFileLoaded" type="hidden" value="false" />
+<input id="node-input-gaSecure" name="node-input-gaSecure" type="hidden" value="false" />
+
+<div class="form-row">
+    <label for="node-input-server">
+        <i class="fa fa-circle-o"></i> <span data-i18n="knxSlim.properties.node-input-server"></span>
+    </label>
+    <input type="text" id="node-input-server" />
+</div>
+
+<div id="divMain">
+
+    <div class="form-row">
+        <label for="node-input-topic">
+            <img
+                src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAACXBIWXMAAB7CAAAewgFu0HU+AAAF6WlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS42LWMxNDggNzkuMTY0MDM2LCAyMDE5LzA4LzEzLTAxOjA2OjU3ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOmRjPSJodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLyIgeG1sbnM6cGhvdG9zaG9wPSJodHRwOi8vbnMuYWRvYmUuY29tL3Bob3Rvc2hvcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RFdnQ9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZUV2ZW50IyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgMjEuMSAoTWFjaW50b3NoKSIgeG1wOkNyZWF0ZURhdGU9IjIwMjAtMDMtMjNUMTY6MjE6MDkrMDE6MDAiIHhtcDpNb2RpZnlEYXRlPSIyMDIwLTAzLTIzVDE2OjI4OjI3KzAxOjAwIiB4bXA6TWV0YWRhdGFEYXRlPSIyMDIwLTAzLTIzVDE2OjI4OjI3KzAxOjAwIiBkYzpmb3JtYXQ9ImltYWdlL3BuZyIgcGhvdG9zaG9wOkNvbG9yTW9kZT0iMyIgcGhvdG9zaG9wOklDQ1Byb2ZpbGU9InNSR0IgSUVDNjE5NjYtMi4xIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOjc4M2I5OWIxLTkwMjYtNGQ2OC05N2FmLTRkM2E2ZWY4Zjk2OCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo4N2E3YTg0NS0xMDljLTRkMTMtOGEzOS04OWVhOTMyMDQ0ZWMiIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo4N2E3YTg0NS0xMDljLTRkMTMtOGEzOS04OWVhOTMyMDQ0ZWMiPiA8eG1wTU06SGlzdG9yeT4gPHJkZjpTZXE+IDxyZGY6bGkgc3RFdnQ6YWN0aW9uPSJjcmVhdGVkIiBzdEV2dDppbnN0YW5jZUlEPSJ4bXAuaWlkOjg3YTdhODQ1LTEwOWMtNGQxMy04YTM5LTg5ZWE5MzIwNDRlYyIgc3RFdnQ6d2hlbj0iMjAyMC0wMy0yM1QxNjoyMTowOSswMTowMCIgc3RFdnQ6c29mdHdhcmVBZ2VudD0iQWRvYmUgUGhvdG9zaG9wIDIxLjEgKE1hY2ludG9zaCkiLz4gPHJkZjpsaSBzdEV2dDphY3Rpb249InNhdmVkIiBzdEV2dDppbnN0YW5jZUlEPSJ4bXAuaWlkOjc4M2I5OWIxLTkwMjYtNGQ2OC05N2FmLTRkM2E2ZWY4Zjk2OCIgc3RFdnQ6d2hlbj0iMjAyMC0wMy0yM1QxNjoyODoyNyswMTowMCIgc3RFdnQ6c29mdHdhcmVBZ2VudD0iQWRvYmUgUGhvdG9zaG9wIDIxLjEgKE1hY2ludG9zaCkiIHN0RXZ0OmNoYW5nZWQ9Ii8iLz4gPC9yZGY6U2VxPiA8L3htcE1NOkhpc3Rvcnk+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+DGyPFQAAAE9JREFUKJG1UEEOACAIgub/v2yHalnJVoe4uIEKSgccJ9jroVmjA0+ujZtWku3DgZmgBiT4egN9CmmEAAfA/5HUW0OQu7dKmOCzmM3k9YYKZv8ZEZ/YgNsAAAAASUVORK5CYII="></img>
+            <span data-i18n="knxSlim.properties.node-input-topic"></span></label>
+        <select id="node-input-setTopicType" style="width:120px">
+            <option value="str" data-i18n="knxSlim.selectlists.SetTopic_str"></option>
+            <option value="listenAllGA" data-i18n="knxSlim.selectlists.SetTopic_listenAllGA"></option>
+            <option value="flow" data-i18n="knxSlim.selectlists.SetTopic_flow"></option>
+            <option value="global" data-i18n="knxSlim.selectlists.SetTopic_global"></option>
+            <option value="env" data-i18n="knxSlim.selectlists.SetTopic_env"></option>
+        </select>
+         <input type="text" id="node-input-topic" data-i18n="[placeholder]knxSlim.placeholder.search"
+            style="width:180px" />
+        <span id="gaSecureShield" title="Data Secure" style="display:none;color:green;margin-left:6px;"><i
+                class="fa fa-shield"></i></span>
+        <input style="flex:1 1 240px; min-width:240px; max-width:240px;" type="text" id="node-input-name"
+            data-i18n="[placeholder]knxSlim.properties.node-input-name" />
+    </div>
+
+    <div class="form-row" id="divDatapointSelection">
+        <label for="node-input-dpt">
+            <img
+                src="data:image/png;base64,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"></img>
+            <span data-i18n="knxSlim.properties.node-input-dpt"></span>
+        </label>
+        <select id="node-input-dpt"></select>
+        <a href="#" id="toggleDptDetails" class="dpt-details-toggle" style="margin-left:10px;">
+            <i class="fa fa-info-circle"></i>&nbsp;<span data-i18n="knxSlim.dptDetails.toggle"></span>
+        </a>
+    </div>
+    <div class="form-row">
+        <span id="dptDetailsContainer" style="display:none;width:100%;">
+            <!-- <div id="sampleCodeEditor" class="dpt-details-helplink" style="color:red;margin-bottom:4px;"></div> -->
+            <div class="node-text-editor" id="example-editor" style="height:110px;padding:0px;"></div>
+        </span>
+    </div>
+    <div id="tabs">
+        <ul>
+            <li><a href="#tabs-1"><i class="fa fa-braille"></i> Advanced options</a></li>
+            <li><a href="#tabs-2"><i class="fa fa-code"></i> KNX Function</a></li>
+        </ul>
+        <div id="tabs-1">
+            <div class="form-row" style="padding:10px">
+                <div class="form-row">
+                    <dt>
+                        <i class="fa fa-desktop"></i> General properties
+                    </dt>
+                </div>
+                <div class="form-row" id="divTopic">
+                    <label style="width:180px" for="node-input-outputtopic">
+                        <i class="fa fa-tasks"></i>
+                        <span data-i18n="knxSlim.properties.node-input-outputtopic"></span>
+                    </label>
+                    <input style="width:220px;" type="text" id="node-input-outputtopic"
+                        data-i18n="[placeholder]knxSlim.placeholder.leaveempty" />
+                </div>
+                <div class="form-row">
+                    <label style="width:180px" for="node-input-passthrough">
+                        <i class="fa fa-long-arrow-right"></i> <span
+                            data-i18n="knxSlim.properties.node-input-passthrough"></span>
+                    </label>
+                    <select id="node-input-passthrough">
+                        <option value="no" data-i18n="knxSlim.selectlists.passthrough_No"></option>
+                        <option value="yes" data-i18n="knxSlim.selectlists.passthrough_Leave"></option>
+                        <option value="yesownprop" data-i18n="knxSlim.selectlists.passthrough_OwnProp"></option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <input type="checkbox" id="node-input-buttonEnabled"
+                        style="display:inline-block; width:auto; vertical-align:top;" />
+                    <label style="width:85%" for="node-input-buttonEnabled">
+                        <i class="fa fa-mouse-pointer"></i> <span
+                            data-i18n="knxSlim.button.enable"></span>
+                    </label>
+                </div>
+                <div id="knx-button-options" style="display:none">
+                    <div class="form-row">
+                        <label style="width:180px" for="node-input-buttonMode">
+                            <i class="fa fa-bolt"></i> <span data-i18n="knxSlim.button.mode"></span>
+                        </label>
+                        <select id="node-input-buttonMode" style="width:220px;">
+                            <option value="toggle" data-i18n="knxSlim.button.mode_toggle"></option>
+                            <option value="value" data-i18n="knxSlim.button.mode_value"></option>
+                        </select>
+                    </div>
+                    <div class="form-row knx-button-toggle-row">
+                        <label style="width:180px" for="node-input-buttonToggleInitial">
+                            <i class="fa fa-refresh"></i> <span data-i18n="knxSlim.button.toggleInitial"></span>
+                        </label>
+                        <select id="node-input-buttonToggleInitial" style="width:220px;">
+                            <option value="true" data-i18n="knxSlim.button.toggleInitial_true"></option>
+                            <option value="false" data-i18n="knxSlim.button.toggleInitial_false"></option>
+                        </select>
+                    </div>
+                    <div class="form-row knx-button-value-row">
+                        <label style="width:180px" for="node-input-buttonStaticValue">
+                            <i class="fa fa-pencil"></i> <span data-i18n="knxSlim.button.value"></span>
+                        </label>
+                        <input type="text" id="node-input-buttonStaticValue" style="width:220px;"
+                            placeholder="42, true, {\"red\":255}" />
+                    </div>
+                </div>
+                <hr>
+                <div class="form-row">
+                    <dt>
+                        <i class="fa fa-arrow-right"></i>| <span
+                            data-i18n="knxSlim.headings.from_input_to_bus"></span>
+                    </dt>
+                </div>
+                <div class="form-row">
+                    <label style="width:180px" for="node-input-outputtype">
+                        <i class="fa fa-paper-plane-o"></i> Telegram type
+                    </label>
+                    <select id="node-input-outputtype">
+                        <option value="write" data-i18n="knxSlim.selectlists.Output_write"></option>
+                        <option value="response" data-i18n="knxSlim.selectlists.Output_response"></option>
+                        <option value="read" data-i18n="knxSlim.selectlists.Output_read"></option>
+                        <option value="update" data-i18n="knxSlim.selectlists.Output_update"></option>
+                    </select>
+                </div>
+                <div class="form-row" id="divOutputRBE">
+                    <label style="width:180px" for="node-input-outputRBE">
+                        <i class="fa fa-filter"></i> <span data-i18n="knxSlim.properties.rbe_filter"></span>
+                    </label>
+                    <select id="node-input-outputRBE">
+                        <option value="true" data-i18n="knxSlim.selectlists.RBE_out_enable"></option>
+                        <option value="false" data-i18n="knxSlim.selectlists.RBE_out_disable"></option>
+                    </select>
+                </div>
+                <div class="form-row" id="divPeriodicSend">
+                    <input type="checkbox" id="node-input-periodicSend"
+                        style="display:inline-block; width:auto; vertical-align:top;" />
+                    <label style="width:85%" for="node-input-periodicSend">
+                        <i class="fa fa-repeat"></i> <span data-i18n="knxSlim.properties.node-input-periodicSend"></span>
+                    </label>
+                </div>
+                <div class="form-row" id="divPeriodicSendInterval">
+                    <label style="width:180px" for="node-input-periodicSendInterval">
+                        <i class="fa fa-clock-o"></i> <span data-i18n="knxSlim.properties.node-input-periodicSendInterval"></span>
+                    </label>
+                    <input type="number" id="node-input-periodicSendInterval" style="width:120px" min="1">
+                </div>
+                <hr>
+                <div class="form-row">
+                    <dt>
+                        |<i class="fa fa-arrow-right"></i> <span |
+                            data-i18n="knxSlim.headings.from_bus_to_output"></span>
+                    </dt>
+                </div>
+                <div class="form-row" id="divNode-input-initialread">
+                    <label style="width:180px" for="node-input-initialread">
+                        <i class="fa fa-question-circle-o"></i> <span
+                            data-i18n="knxSlim.properties.node-input-initialread"></span>
+                    </label>
+                    <select id="node-input-initialread">
+                        <option value=0 data-i18n="knxSlim.properties.node-input-initialread0"></option>
+                        <option value=1 data-i18n="knxSlim.properties.node-input-initialread1"></option>
+                        <option value=2 data-i18n="knxSlim.properties.node-input-initialread2"></option>
+                        <option value=3 data-i18n="knxSlim.properties.node-input-initialread3"></option>
+                    </select>
+
+                </div>
+                <div class="form-row" id="divInputRBE">
+                    <label style="width:180px" for="node-input-inputRBE">
+                        <i class="fa fa-filter"></i> <span data-i18n="knxSlim.properties.rbe_filter"></span>
+                    </label>
+                    <select id="node-input-inputRBE">
+                        <option value="true" data-i18n="knxSlim.selectlists.RBE_in_enable"></option>
+                        <option value="false" data-i18n="knxSlim.selectlists.RBE_in_disable"></option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <input type="checkbox" id="node-input-notifywrite"
+                        style="display:inline-block; width:auto; vertical-align:top;" />
+                    <label style="width:85%" for="node-input-notifywrite">
+                        <i class="fa fa-sign-in"></i> <span
+                            data-i18n="knxSlim.properties.node-input-notifywrite"></span>
+                    </label>
+                </div>
+                <div class="form-row">
+                    <input type="checkbox" id="node-input-notifyresponse"
+                        style="display:inline-block; width:auto; vertical-align:top;" />
+                    <label style="width:85%" for="node-input-notifyresponse">
+                        <i class="fa fa-sign-in"></i> <span
+                            data-i18n="knxSlim.properties.node-input-notifyresponse"></span>
+                    </label>
+                </div>
+                <div class="form-row">
+                    <input type="checkbox" id="node-input-notifyreadrequest"
+                        style="display:inline-block; width:auto; vertical-align:top;" />
+                    <label style="width:85%" for="node-input-notifyreadrequest">
+                        <i class="fa fa-sign-in"></i> <span
+                            data-i18n="knxSlim.properties.node-input-notifyreadrequest"></span>
+                    </label>
+                </div>
+                <div id="divnotifyreadrequestautoreact">
+                    <dd>
+                        <div class="form-row">
+                            <input type="checkbox" id="node-input-notifyreadrequestalsorespondtobus"
+                                style="display:inline-block; width:auto; vertical-align:top;" />
+                            <label style="width:85%" for="node-input-notifyreadrequestalsorespondtobus">
+                                <span
+                                    data-i18n="knxSlim.properties.node-input-notifyreadrequestalsorespondtobus"></span>
+                            </label>
+                        </div>
+                        <div class="form-row">
+                            &nbsp;<label style="width:auto">
+                                <span
+                                    data-i18n="knxSlim.properties.node-input-notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized"></span>
+                            </label>
+                            <input style="width:auto" type="text"
+                                id="node-input-notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized"
+                                data-i18n="[placeholder]knxSlim.placeholder.notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized" />
+                        </div>
+                    </dd>
+                </div>
+                <div class="form-row" id="divFormatSectionHeader">
+                    <dt>
+                        <i class="fa fa-sort-numeric-asc"></i> Format numeric values coming from the KNX BUS
+                    </dt>
+                </div>
+                <div class="form-row" id="divFormatMultiply">
+                    <label style="width:180px" for="node-input-formatmultiplyvalue">
+                        <i class="fa fa-calculator"></i>
+                        <span data-i18n="knxSlim.properties.node-input-formatmultiplyvalue"></span>
+                    </label>
+                    <select id="node-input-formatmultiplyvalue">
+                        <option value=1 data-i18n="knxSlim.selectlists.Multiply_leave"></option>
+                        <option value=0.001 data-i18n="knxSlim.selectlists.Multiply_divide1000"></option>
+                        <option value=0.01 data-i18n="knxSlim.selectlists.Multiply_divide100"></option>
+                        <option value=0.1 data-i18n="knxSlim.selectlists.Multiply_divide10"></option>
+                        <option value=10 data-i18n="knxSlim.selectlists.Multiply_multiply10"></option>
+                        <option value=100 data-i18n="knxSlim.selectlists.Multiply_multiply100"></option>
+                        <option value=1000 data-i18n="knxSlim.selectlists.Multiply_multiply1000"></option>
+                    </select>
+                </div>
+                <div class="form-row" id="divFormatDecimals">
+                    <label style="width:180px" for="node-input-formatdecimalsvalue">
+                        <i class="fa fa-expand"></i>
+                        <span data-i18n="knxSlim.properties.node-input-formatdecimalsvalue"></span>
+                    </label>
+                    <select id="node-input-formatdecimalsvalue">
+                        <option value=999 data-i18n="knxSlim.selectlists.Decimals_leave"></option>
+                        <option value=0 data-i18n="knxSlim.selectlists.Decimals_roundint"></option>
+                        <option value=1 data-i18n="knxSlim.selectlists.Decimals_round1"></option>
+                        <option value=2 data-i18n="knxSlim.selectlists.Decimals_round2"></option>
+                        <option value=3 data-i18n="knxSlim.selectlists.Decimals_round3"></option>
+                        <option value=4 data-i18n="knxSlim.selectlists.Decimals_round4"></option>
+                    </select>
+                </div>
+                <div class="form-row" id="divFormatNegative">
+                    <label style="width:180px" for="node-input-formatnegativevalue">
+                        <i class="fa fa-minus-circle"></i>
+                        <span data-i18n="knxSlim.properties.node-input-formatnegativevalue"></span>
+                    </label>
+                    <select id="node-input-formatnegativevalue">
+                        <option value="leave" data-i18n="knxSlim.selectlists.Negatives_leave"></option>
+                        <option value="zero" data-i18n="knxSlim.selectlists.Negatives_zero"></option>
+                        <option value="abs" data-i18n="knxSlim.selectlists.Negatives_abs"></option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="tabs-2">
+            <div class="form-row" style="padding:10px">
+
+                <div class="form-row" id="divknxFunctionHelperGAList">
+                    <label for="node-input-knxFunctionHelperGAList">
+                        <i class="fa fa-search"></i> <span data-i18n="knxSlim.snippets.searchGA"></span>
+                    </label>
+                    <input type="text" id="node-input-knxFunctionHelperGAList"
+                        data-i18n="[placeholder]knxSlim.placeholder.search" style="max-width:260px;" />
+                    <button type="button" class="red-ui-button" id="btn-insert-knxFunctionGA" title="Insert"
+                        style="margin-left:4px;">
+                        <i class="fa fa-level-down"></i>
+                    </button>
+                </div>
+
+
+                <div class="form-row">
+                    <dt>
+                        <i class="fa fa-arrow-right"></i>&nbsp;<span
+                            data-i18n="knxSlim.headings.from_input_to_bus"></span>
+                    </dt>
+                </div>
+                <div style="height:200px;min-height:150px;padding:0px;">
+                    <div style="height:100%;width:100%;padding:0px;" class="node-text-editor"
+                        id="sendMsgToKNXCode-editor"></div>
+                </div>
+                <div class="snippet-picker">
+                    <i class="fa fa-code"></i> <span data-i18n="knxSlim.snippets.select"></span><br />
+                    <input type="text" id="sendSnippetPicker" class="snippet-picker-input" list="sendSnippetOptions"
+                        style="width:100%;max-width:420px;margin-top:4px;"
+                        data-i18n="[placeholder]knxSlim.snippets.searchPlaceholder;[data-placeholder]knxSlim.snippets.searchPlaceholder;[data-empty]knxSlim.snippets.emptyPlaceholder" />
+                    <datalist id="sendSnippetOptions"></datalist>
+                </div>
+                <hr>
+                <div class="form-row">
+                    <dt>
+                        <i class="fa fa-arrow-right"></i>&nbsp;<span
+                            data-i18n="knxSlim.headings.from_bus_to_output"></span>
+                    </dt>
+                </div>
+                <div style="height:200px;min-height:150px;padding:0px;">
+                    <div style="height:100%;width:100%;padding:0px;" class="node-text-editor"
+                        id="receiveMsgFromKNXCode-editor"></div>
+                </div>
+                <div class="snippet-picker">
+                    <i class="fa fa-code"></i> <span data-i18n="knxSlim.snippets.select"></span><br />
+                    <input type="text" id="receiveSnippetPicker" class="snippet-picker-input"
+                        list="receiveSnippetOptions" style="width:100%;max-width:420px;margin-top:4px;"
+                        data-i18n="[placeholder]knxSlim.snippets.searchPlaceholder;[data-placeholder]knxSlim.snippets.searchPlaceholder;[data-empty]knxSlim.snippets.emptyPlaceholder" />
+                    <datalist id="receiveSnippetOptions"></datalist>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div id="divDeployFirst">
+    <div class="form-tips" style="margin-top:11px">
+        <span data-i18n="knxSlim.deployfirst"></span>
+    </div>
+</div>
+<br /><br />
+</script>

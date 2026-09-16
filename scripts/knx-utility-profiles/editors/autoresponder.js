@@ -1,8 +1,8 @@
-RED.nodes.registerType('knxUltimateAutoResponder', {
-        category: "KNX Ultimate",
+RED.nodes.registerType('knxSlimAutoResponder', {
+        category: "KNX Slim",
         color: '#C7E9C0',
         defaults: {
-            server: { type: "knxUltimate-config", required: true },
+            server: { type: "knxSlim-config", required: true },
             name: { value: "Auto responder", required: false },
             commandText: {
                 value: '[]', required: false,

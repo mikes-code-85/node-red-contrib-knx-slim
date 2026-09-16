@@ -1,7 +1,7 @@
 (function (root, factory) {
   const api = factory(root)
   if (typeof module === 'object' && module.exports) module.exports = api
-  if (root) root.KNXUltimateFlowMigrationBackup = api
+  if (root) root.KNXSlimFlowMigrationBackup = api
 }(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict'
 

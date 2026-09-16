@@ -8,7 +8,7 @@
   },
   {
     "id": "ar_cfg",
-    "type": "knxUltimate-config",
+    "type": "knxSlim-config",
     "z": "",
     "host": "224.0.23.12",
     "port": "3671",
@@ -31,7 +31,7 @@
   },
   {
     "id": "ar_node",
-    "type": "knxUltimateAutoResponder",
+    "type": "knxSlimAutoResponder",
     "z": "ar_tab",
     "server": "ar_cfg",
     "name": "Auto responder",

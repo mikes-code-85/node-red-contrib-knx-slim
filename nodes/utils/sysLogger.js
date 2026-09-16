@@ -8,7 +8,7 @@ const { combine, timestamp, label, printf, colorize, splat } = winston.format
 const colorizer = colorize()
 const SPLAT = Symbol.for('splat')
 
-// Keep the application log format aligned with the KNXUltimate engine while
+// Keep the application log format aligned with the KNXSlim engine while
 // owning a separate logger instance for each Node-RED node/configuration node.
 winston.addColors({
   time: 'grey',

@@ -3,7 +3,7 @@ node_modules
 *.code-workspace
 .vscode/
 package-lock.json
-KNXUltimateDebugLog.txt
+KNXSlimDebugLog.txt
 tutorial/
 docs/
 scripts/

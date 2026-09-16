@@ -1,10 +1,10 @@
 {
-  "name": "node-red-contrib-knx-ultimate",
+  "name": "node-red-contrib-knx-slim",
   "engines": {
     "node": ">=20.18.1"
   },
   "version": "7.1.0-beta.1",
-  "description": "KNX Ultimate is a lean KNX integration for Node-RED, providing secure KNX/IP communication, routing, ETS project import, diagnostics, virtual devices, and core automation nodes. Build professional, reliable, and scalable smart home and building automation projects with minimal effort.",
+  "description": "KNX Slim is a set of KNX nodes, based on Supergiovane/node-red-contrib-knx-ultimate, stripped down to core functionality. This code does not have the extensive review the original package has.",
   "files": [
     "nodes/",
     "resources/",
@@ -27,21 +27,21 @@
       "commonFunctions": "/nodes/commonFunctions.js"
     },
     "nodes": {
-      "knxUltimate": "/nodes/knxUltimate.js",
-      "knxUltimateUtility": "/nodes/knxUltimateUtility.js",
-      "knxUltimateDateTime": "/nodes/knxUltimateDateTime.js",
-      "knxUltimateGlobalContext": "/nodes/knxUltimateGlobalContext.js",
-      "knxUltimateAlerter": "/nodes/knxUltimateAlerter.js",
-      "knxUltimateMultiRouting": "/nodes/knxUltimateMultiRouting.js",
-      "knxUltimateRouterFilter": "/nodes/knxUltimateRouterFilter.js",
-      "knxUltimateAutoResponder": "/nodes/knxUltimateAutoResponder.js",
-      "knxUltimateWatchDog": "/nodes/knxUltimateWatchDog.js",
-      "knxUltimate-config": "/nodes/knxUltimate-config.js"
+      "knxSlim": "/nodes/knxSlim.js",
+      "knxSlimUtility": "/nodes/knxSlimUtility.js",
+      "knxSlimDateTime": "/nodes/knxSlimDateTime.js",
+      "knxSlimGlobalContext": "/nodes/knxSlimGlobalContext.js",
+      "knxSlimAlerter": "/nodes/knxSlimAlerter.js",
+      "knxSlimMultiRouting": "/nodes/knxSlimMultiRouting.js",
+      "knxSlimRouterFilter": "/nodes/knxSlimRouterFilter.js",
+      "knxSlimAutoResponder": "/nodes/knxSlimAutoResponder.js",
+      "knxSlimWatchDog": "/nodes/knxSlimWatchDog.js",
+      "knxSlim-config": "/nodes/knxSlim-config.js"
     }
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Supergiovane/node-red-contrib-knx-ultimate.git"
+    "url": "https://github.com/mikes-code-85/node-red-contrib-knx-slim.git"
   },
   "keywords": [
     "node-red",
@@ -58,9 +58,8 @@
     "routing"
   ],
   "author": {
-    "name": "Massimo Saccani",
-    "email": "maxsupergiovane@icloud.com",
-    "url": "https://youtube.com/@maxsupervibe"
+    "name": "mikes-code-85",
+    "email": "ms.nr.emea@gmail.com"
   },
   "license": "MIT",
   "scripts": {

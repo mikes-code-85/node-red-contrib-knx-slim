@@ -1,7 +1,7 @@
 (function (root, factory) {
   const api = factory()
   if (typeof module === 'object' && module.exports) module.exports = api
-  if (root) root.KNXUltimateFunctionAutocomplete = api
+  if (root) root.KNXSlimFunctionAutocomplete = api
 }(typeof window !== 'undefined' ? window : globalThis, function () {
   const firstArgument = /(?:^|[^\w$.])(?:getGAValue|setGAValue)\s*\(\s*$/
 

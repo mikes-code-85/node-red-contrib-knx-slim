@@ -1,0 +1,2736 @@
+/* eslint-disable prefer-template */
+/* eslint-disable no-inner-declarations */
+/* eslint-disable curly */
+/* eslint-disable max-len */
+/* eslint-disable prefer-arrow-callback */
+const fs = require('fs')
+const path = require('path')
+const net = require('net')
+const dns = require('dns/promises')
+const os = require('os')
+const _ = require('lodash')
+const knx = require('knxultimate')
+// 2025-09: Use KNXSlim built-in keyring for KNX Secure validation
+let Keyring
+try {
+  // Not exported by default; import from build path
+  ({ Keyring } = require('knxultimate/build/secure/keyring'))
+} catch (e) {
+  Keyring = null
+}
+// const dptlib = require('knxultimate').dptlib;
+const dptlib = require('knxultimate').dptlib
+const loggerClass = require('./utils/sysLogger')
+// const { Server } = require('http')
+const payloadRounder = require('./utils/payloadManipulation')
+const utils = require('./utils/utils')
+const dispatchWatchDogNodeError = require('./utils/watchDogErrorDispatcher')
+
+// Versions logged once at startup (node package + KNXSlim engine)
+let NODE_VERSION = 'unknown'
+try { NODE_VERSION = require('../package.json').version } catch (e) { /* empty */ }
+let KNX_ENGINE_VERSION = 'unknown'
+try { KNX_ENGINE_VERSION = require('knxultimate/package.json').version } catch (e) { /* empty */ }
+
+// DATAPONT MANIPULATION HELPERS
+// ####################
+const sortBy = (field) => (a, b) => {
+  if (a[field] > b[field]) {
+    return 1
+  } else {
+    return -1
+  }
+}
+
+const onlyDptKeys = (kv) => {
+  return kv[0].startsWith('DPT')
+}
+
+const extractBaseNo = (kv) => {
+  return {
+    subtypes: kv[1].subtypes,
+    base: parseInt(kv[1].id.replace('DPT', ''))
+  }
+}
+
+const convertSubtype = (baseType) => (kv) => {
+  const value = `${baseType.base}.${kv[0]}`
+  // let sRet = value + " " + kv[1].name + (kv[1].unit === undefined ? "" : " (" + kv[1].unit + ")");
+  const sRet = value + ' ' + kv[1].name
+  return {
+    value,
+    text: sRet
+  }
+}
+
+const toConcattedSubtypes = (acc, baseType) => {
+  const subtypes = Object.entries(baseType.subtypes).sort(sortBy(0)).map(convertSubtype(baseType))
+
+  return acc.concat(subtypes)
+}
+// ####################
+
+const BIT_COUNT_TABLE = Array.from({ length: 256 }, (_, value) => {
+  let count = 0
+  let temp = value
+  while (temp) {
+    temp &= temp - 1
+    count++
+  }
+  return count
+})
+
+const parseIPv4Address = (str) => {
+  if (typeof str !== 'string') return null
+  const parts = str.trim().split('.')
+  if (parts.length !== 4) return null
+  const octets = []
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    if (!/^\d+$/.test(part)) return null
+    const value = Number(part)
+    if (!Number.isInteger(value) || value < 0 || value > 255) return null
+    octets.push(value)
+  }
+  return octets
+}
+
+const countNetmaskBits = (maskOctets) => {
+  if (!Array.isArray(maskOctets) || maskOctets.length !== 4) return 0
+  let total = 0
+  for (let i = 0; i < 4; i++) {
+    const oct = maskOctets[i]
+    if (!Number.isInteger(oct) || oct < 0 || oct > 255) return 0
+    total += BIT_COUNT_TABLE[oct]
+  }
+  return total
+}
+
+const computeIPv4NetworkKey = (ipOctets, maskOctets) => {
+  if (!Array.isArray(ipOctets) || ipOctets.length !== 4 || !Array.isArray(maskOctets) || maskOctets.length !== 4) return null
+  const result = []
+  for (let i = 0; i < 4; i++) {
+    const ipVal = ipOctets[i]
+    const maskVal = maskOctets[i]
+    if (!Number.isInteger(ipVal) || ipVal < 0 || ipVal > 255 || !Number.isInteger(maskVal) || maskVal < 0 || maskVal > 255) return null
+    result.push(ipVal & maskVal)
+  }
+  return result.join('.')
+}
+
+const buildNetmaskOctetsFromPrefix = (prefix) => {
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) return null
+  const octets = [0, 0, 0, 0]
+  let remaining = prefix
+  for (let i = 0; i < 4; i++) {
+    const bits = Math.max(0, Math.min(remaining, 8))
+    octets[i] = bits === 0 ? 0 : ((0xff << (8 - bits)) & 0xff)
+    remaining -= bits
+  }
+  return octets
+}
+
+const deriveNetmaskOctets = (iface) => {
+  if (!iface) return null
+  const netmask = typeof iface.netmask === 'string' && iface.netmask.trim() !== '' ? iface.netmask : null
+  if (netmask) {
+    const octets = parseIPv4Address(netmask)
+    if (octets) return octets
+  }
+  if (typeof iface.cidr === 'string' && iface.cidr.includes('/')) {
+    const parts = iface.cidr.split('/')
+    if (parts.length === 2) {
+      const prefix = Number(parts[1])
+      const octets = buildNetmaskOctetsFromPrefix(prefix)
+      if (octets) return octets
+    }
+  }
+  return null
+}
+
+const isMulticastIPv4 = (octets) => {
+  if (!Array.isArray(octets) || octets.length !== 4) return false
+  const first = octets[0]
+  return first >= 224 && first <= 239
+}
+
+const findAutoEthernetInterface = (targetIP) => {
+  const targetOctets = parseIPv4Address(targetIP)
+  if (!targetOctets || isMulticastIPv4(targetOctets)) return null
+  const interfaces = os.networkInterfaces()
+  if (!interfaces || typeof interfaces !== 'object') return null
+
+  let bestMatch = null
+  let bestMaskBits = -1
+
+  Object.keys(interfaces).forEach((ifname) => {
+    const entries = Array.isArray(interfaces[ifname]) ? interfaces[ifname] : []
+    entries.forEach((entry) => {
+      if (!entry || entry.internal) return
+      const family = entry.family === 'IPv4' || entry.family === 4
+      if (!family) return
+      const ifaceOctets = parseIPv4Address(entry.address)
+      if (!ifaceOctets) return
+      const maskOctets = deriveNetmaskOctets(entry)
+      if (!maskOctets) return
+      const ifaceNetwork = computeIPv4NetworkKey(ifaceOctets, maskOctets)
+      const targetNetwork = computeIPv4NetworkKey(targetOctets, maskOctets)
+      if (!ifaceNetwork || !targetNetwork || ifaceNetwork !== targetNetwork) return
+      const maskBits = countNetmaskBits(maskOctets)
+      if (maskBits > bestMaskBits) {
+        bestMaskBits = maskBits
+        bestMatch = {
+          name: ifname,
+          address: entry.address,
+          netmask: maskOctets.join('.'),
+          maskBits
+        }
+      }
+    })
+  })
+
+  return bestMatch
+}
+
+const resolveHostAddress = async (hostname, lookup = dns.lookup) => {
+  const { address } = await lookup(hostname, { order: 'verbatim' })
+  return address
+}
+
+module.exports = (RED) => {
+  // Log node and KNXSlim engine versions once, at Node-RED startup.
+  try {
+    RED.log.info(`KNXSlim: node-red-contrib-knx-slim v${NODE_VERSION} (KNXSlim engine v${KNX_ENGINE_VERSION})`)
+  } catch (e) { /* empty */ }
+
+  function knxSlimConfigNode (config) {
+    RED.nodes.createNode(this, config)
+    const node = this
+    node.host = config.host
+    node.port = parseInt(config.port)
+    node.physAddr = config.physAddr // the KNX physical address we'd like to use
+    node.suppressACKRequest = typeof config.suppressACKRequest === 'undefined' ? true : config.suppressACKRequest // enable this option to suppress the acknowledge flag with outgoing L_Data.req requests. LoxOne needs this
+    node.linkStatus = 'disconnected' // Can be: connected or disconnected
+    node.nodeClients = [] // Stores the registered clients
+    node.KNXEthInterface = typeof config.KNXEthInterface === 'undefined' ? 'Auto' : config.KNXEthInterface
+    node.KNXEthInterfaceManuallyInput = typeof config.KNXEthInterfaceManuallyInput === 'undefined' ? '' : config.KNXEthInterfaceManuallyInput // If you manually set the interface name, it will be wrote here
+    node.timerDoInitialRead = null // 17/02/2020 Timer (timeout) to do initial read of all nodes requesting initial read, after all nodes have been registered to the sercer
+    node.stopETSImportIfNoDatapoint = typeof config.stopETSImportIfNoDatapoint === 'undefined' ? 'stop' : config.stopETSImportIfNoDatapoint // 09/01/2020 Stop, Import Fake or Skip the import if a group address has unset datapoint
+    node.userDir = path.join(RED.settings.userDir, 'knxultimatestorage') // 04/04/2021 Supergiovane: Storage for service files
+    node.exposedGAs = []
+    node.exposedGAsByGa = new Map()
+    node.loglevel = config.loglevel !== undefined ? config.loglevel : 'error' // 18/02/2020 Loglevel default error
+    if (node.loglevel === 'trace') node.loglevel = 'debug' // Backward compatibility
+    if (node.loglevel === 'silent') node.loglevel = 'disable' // Backward compatibility
+    node.sysLogger = null // 20/03/2022 Default
+    try {
+      node.sysLogger = new loggerClass({ loglevel: node.loglevel, setPrefix: node.type + ' <' + (node.name || node.id || '') + '>' })
+    } catch (error) { console.log(error.stack) }
+    node.csv = readCSV(config.csv) // Array from ETS CSV Group Addresses {ga:group address, dpt: datapoint, devicename: full device name with main and subgroups}
+    node.csvByGa = new Map()
+    if (Array.isArray(node.csv)) {
+      node.csv.forEach((entry) => {
+        if (entry && typeof entry.ga === 'string' && entry.ga !== '') node.csvByGa.set(entry.ga, entry)
+      })
+    }
+
+    node.rebuildExposedGAIndex = () => {
+      node.exposedGAsByGa = new Map()
+      if (!Array.isArray(node.exposedGAs)) return
+      node.exposedGAs.forEach((entry) => {
+        if (entry && typeof entry.ga === 'string' && entry.ga !== '') node.exposedGAsByGa.set(entry.ga, entry)
+      })
+    }
+
+    node.getExposedGAEntry = (ga) => {
+      if (typeof ga !== 'string' || ga === '') return undefined
+      return node.exposedGAsByGa.get(ga)
+    }
+
+    node.upsertExposedGAEntry = (entry) => {
+      if (!entry || typeof entry.ga !== 'string' || entry.ga === '') return undefined
+      const existing = node.exposedGAsByGa.get(entry.ga)
+      if (existing) {
+        Object.assign(existing, entry)
+        return existing
+      }
+      node.exposedGAs.push(entry)
+      node.exposedGAsByGa.set(entry.ga, entry)
+      return entry
+    }
+
+    node.removeExposedGAEntry = (ga) => {
+      if (typeof ga !== 'string' || ga === '') return
+      node.exposedGAsByGa.delete(ga)
+      const index = node.exposedGAs.findIndex((item) => item.ga === ga)
+      if (index > -1) node.exposedGAs.splice(index, 1)
+    }
+
+    // 12/11/2021 Connect at start delay
+    node.autoReconnect = true // 20/03/2022 Default
+    if (config.autoReconnect === 'no' || config.autoReconnect === false) {
+      node.autoReconnect = false
+    } else {
+      node.autoReconnect = true
+    }
+    node.enableFlowBubbles = config.enableFlowBubbles === true || config.enableFlowBubbles === 'true'
+    node.ignoreTelegramsWithRepeatedFlag = config.ignoreTelegramsWithRepeatedFlag === undefined ? false : config.ignoreTelegramsWithRepeatedFlag
+    const throttleSecondsRaw = Number(config.statusUpdateThrottle)
+    node.statusUpdateThrottleMs = Number.isFinite(throttleSecondsRaw) && throttleSecondsRaw > 0
+      ? throttleSecondsRaw * 1000
+      : 0
+
+    node.statusDateTimeFormat = typeof config.statusDateTimeFormat === 'string' && config.statusDateTimeFormat !== ''
+      ? config.statusDateTimeFormat
+      : 'legacy'
+    node.statusDateTimeCustom = typeof config.statusDateTimeCustom === 'string' && config.statusDateTimeCustom.trim() !== ''
+      ? config.statusDateTimeCustom.trim()
+      : 'DD MMM HH:mm'
+    node.statusDateTimeLocale = typeof config.statusDateTimeLocale === 'string'
+      ? config.statusDateTimeLocale.trim()
+      : ''
+
+    const resolveDateTimeLocale = () => {
+      const raw = node.statusDateTimeLocale
+      return raw && raw !== '' ? raw : undefined
+    }
+
+    const pad2 = (value) => String(value).padStart(2, '0')
+    const formatTimezoneOffset = (date) => {
+      const minutes = -date.getTimezoneOffset()
+      const sign = minutes >= 0 ? '+' : '-'
+      const abs = Math.abs(minutes)
+      return `${sign}${pad2(Math.floor(abs / 60))}:${pad2(abs % 60)}`
+    }
+
+    const safeMonthShortFormatter = () => {
+      try {
+        return new Intl.DateTimeFormat(resolveDateTimeLocale(), { month: 'short' })
+      } catch (error) {
+        try {
+          return new Intl.DateTimeFormat(undefined, { month: 'short' })
+        } catch (fallbackError) {
+          return null
+        }
+      }
+    }
+
+    let monthShortFormatter = null
+    const monthShort = (date) => {
+      if (!monthShortFormatter) monthShortFormatter = safeMonthShortFormatter()
+      if (monthShortFormatter) {
+        try {
+          return monthShortFormatter.format(date)
+        } catch (error) { /* empty */ }
+      }
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      return months[date.getMonth()]
+    }
+
+    const formatDateTimeTokens = (date, format) => {
+      const year = date.getFullYear()
+      const month = date.getMonth() + 1
+      const day = date.getDate()
+      const hour24 = date.getHours()
+      const minute = date.getMinutes()
+      const second = date.getSeconds()
+      const hour12 = (hour24 % 12) || 12
+      const ampm = hour24 < 12 ? 'AM' : 'PM'
+
+      const tokenValues = {
+        YYYY: String(year),
+        YY: pad2(year % 100),
+        MMM: monthShort(date),
+        MM: pad2(month),
+        M: String(month),
+        DD: pad2(day),
+        D: String(day),
+        HH: pad2(hour24),
+        H: String(hour24),
+        hh: pad2(hour12),
+        h: String(hour12),
+        mm: pad2(minute),
+        ss: pad2(second),
+        A: ampm,
+        a: ampm.toLowerCase(),
+        Z: formatTimezoneOffset(date)
+      }
+
+      const tokens = Object.keys(tokenValues).sort((a, b) => b.length - a.length)
+      let out = ''
+      let i = 0
+      while (i < format.length) {
+        const ch = format[i]
+        if (ch === '[') {
+          const end = format.indexOf(']', i + 1)
+          if (end === -1) {
+            out += ch
+            i += 1
+          } else {
+            out += format.slice(i + 1, end)
+            i = end + 1
+          }
+          continue
+        }
+        let matched = false
+        for (const token of tokens) {
+          if (format.startsWith(token, i)) {
+            out += tokenValues[token]
+            i += token.length
+            matched = true
+            break
+          }
+        }
+        if (!matched) {
+          out += ch
+          i += 1
+        }
+      }
+      return out
+    }
+
+    node.formatStatusTimestamp = (value, options = {}) => {
+      try {
+        const date = value instanceof Date ? value : new Date(value)
+        if (Number.isNaN(date.getTime())) return ''
+
+        const mode = node.statusDateTimeFormat
+        if (mode === 'iso') return formatDateTimeTokens(date, 'YYYY-MM-DD HH:mm:ss')
+        if (mode === 'isoNoSeconds') return formatDateTimeTokens(date, 'YYYY-MM-DD HH:mm')
+        if (mode === 'custom') return formatDateTimeTokens(date, node.statusDateTimeCustom || 'DD MMM HH:mm')
+        const legacy = `${date.getDate()}, ${date.toLocaleTimeString()}`
+        return options && options.legacyDayLabel ? `day ${legacy}` : legacy
+      } catch (error) {
+        try {
+          const date = new Date()
+          const legacy = `${date.getDate()}, ${date.toLocaleTimeString()}`
+          return options && options.legacyDayLabel ? `day ${legacy}` : legacy
+        } catch (fallbackError) {
+          return ''
+        }
+      }
+    }
+
+    node.applyStatusUpdate = (targetNode, status) => {
+      try {
+        if (!targetNode || typeof targetNode.status !== 'function') return
+        const throttle = node.statusUpdateThrottleMs
+        if (!throttle) {
+          targetNode.status(status)
+          return
+        }
+        if (!targetNode.__knxStatusThrottle) {
+          targetNode.__knxStatusThrottle = { pending: undefined, timer: null }
+        }
+        const tracker = targetNode.__knxStatusThrottle
+        tracker.pending = status
+        if (tracker.timer) return
+        tracker.timer = setTimeout(() => {
+          try {
+            if (tracker.pending !== undefined) {
+              targetNode.status(tracker.pending)
+            }
+          } catch (timerError) {
+            node.sysLogger?.warn('Unable to apply throttled status: ' + timerError.message)
+          } finally {
+            tracker.pending = undefined
+            tracker.timer = null
+          }
+        }, throttle)
+      } catch (error) {
+        node.sysLogger?.warn('applyStatusUpdate error: ' + error.message)
+      }
+    }
+    // 24/07/2021 KNX Secure checks...
+    node.keyringFileXML = typeof config.keyringFileXML === 'undefined' || config.keyringFileXML.trim() === '' ? '' : config.keyringFileXML
+    node.knxSecureSelected = typeof config.knxSecureSelected === 'undefined' ? false : config.knxSecureSelected
+    node.secureCredentialsMode = typeof config.secureCredentialsMode === 'undefined' ? 'keyring' : config.secureCredentialsMode
+    // 2025-09 Secure Tunnel Interface IA selection (Auto/Manual)
+    node.tunnelIASelection = typeof config.tunnelIASelection === 'undefined' ? 'Auto' : config.tunnelIASelection
+    node.tunnelIA = typeof config.tunnelIA === 'undefined' || config.tunnelIA === null ? '' : String(config.tunnelIA)
+    node.tunnelInterfaceIndividualAddress = typeof config.tunnelInterfaceIndividualAddress === 'undefined' || config.tunnelInterfaceIndividualAddress === null
+      ? ''
+      : String(config.tunnelInterfaceIndividualAddress)
+    const normalizedTunnelIA = (value) => {
+      if (typeof value !== 'string') return ''
+      const trimmed = value.trim()
+      return trimmed === 'undefined' ? '' : trimmed
+    }
+    node.tunnelIA = normalizedTunnelIA(node.tunnelIA)
+    node.tunnelInterfaceIndividualAddress = normalizedTunnelIA(node.tunnelInterfaceIndividualAddress)
+    if (!node.tunnelInterfaceIndividualAddress && node.tunnelIA) {
+      node.tunnelInterfaceIndividualAddress = node.tunnelIA
+    } else if (!node.tunnelIA && node.tunnelInterfaceIndividualAddress) {
+      node.tunnelIA = node.tunnelInterfaceIndividualAddress
+    }
+    node.tunnelUserPassword = typeof config.tunnelUserPassword === 'undefined' ? '' : config.tunnelUserPassword
+    node.tunnelUserId = typeof config.tunnelUserId === 'undefined' ? '' : config.tunnelUserId
+    node.name = config.name === undefined || config.name === '' ? node.host : config.name // 12/08/2021
+    node.timerKNXSlimCheckState = null // 08/10/2021 Check the state. If not connected and autoreconnect is true, retrig the connetion attempt.
+    node.knxConnectionProperties = null // Retains the connection properties
+    node.allowLauch_initKNXConnection = true // See the node.timerKNXSlimCheckState function
+    // Serial FT1.2 configuration
+    const sanitizeSerialPath = (value) => {
+      if (typeof value !== 'string') return ''
+      const trimmed = value.trim()
+      if (trimmed === '' || trimmed === 'undefined') return ''
+      return trimmed
+    }
+    const parsePositiveNumber = (value, fallback) => {
+      const n = Number(value)
+      return Number.isFinite(n) && n > 0 ? n : fallback
+    }
+    const parseDataBits = (value) => {
+      const allowed = [5, 6, 7, 8]
+      const candidate = parsePositiveNumber(value, 8)
+      return allowed.includes(candidate) ? candidate : 8
+    }
+    const parseStopBits = (value) => {
+      const allowed = [1, 2]
+      const candidate = parsePositiveNumber(value, 1)
+      return allowed.includes(candidate) ? candidate : 1
+    }
+    const parseParity = (value) => {
+      const allowed = ['none', 'even', 'odd']
+      const val = typeof value === 'string' ? value.trim().toLowerCase() : ''
+      return allowed.includes(val) ? val : 'even'
+    }
+    const parseBoolean = (value, fallback) => {
+      if (typeof value === 'boolean') return value
+      if (typeof value === 'string') {
+        if (value.toLowerCase() === 'true') return true
+        if (value.toLowerCase() === 'false') return false
+      }
+      return fallback
+    }
+    const serialPathFromConfig = sanitizeSerialPath(config.serialPortPath)
+    const legacySerialPath = config.hostProtocol === 'SerialFT12' ? sanitizeSerialPath(config.host) : ''
+    node.serialPortPath = serialPathFromConfig || legacySerialPath || '/dev/ttyAMA0'
+    node.serialBaudRate = parsePositiveNumber(config.serialBaudRate, 19200)
+    node.serialDataBits = parseDataBits(config.serialDataBits)
+    node.serialStopBits = parseStopBits(config.serialStopBits)
+    node.serialParity = parseParity(config.serialParity)
+    node.serialRtscts = parseBoolean(config.serialRtscts, false)
+    node.serialDtr = parseBoolean(config.serialDtr, true)
+    node.serialTimeout = parsePositiveNumber(config.serialTimeout, 1200)
+    node.isKBERRY = parseBoolean(config.isKBERRY, true)
+    node.hostProtocol = config.hostProtocol === undefined ? 'Auto' : config.hostProtocol // 20/03/2022 Default
+    node.knxConnection = null // 20/03/2022 Default
+    node.serialDriverRef = null // Keep last FT1.2 driver to force-close on redeploy
+    node.delaybetweentelegrams = (config.delaybetweentelegrams === undefined || config.delaybetweentelegrams === null || config.delaybetweentelegrams === '') ? 25 : Number(config.delaybetweentelegrams)
+    if (node.delaybetweentelegrams < 25) node.delaybetweentelegrams = 25 // Protection avoiding handleKNXQueue hangs
+    if (node.delaybetweentelegrams > 100) node.delaybetweentelegrams = 100 // Protection avoiding handleKNXQueue hangs
+    node.timerSaveExposedGAs = null // Timer to save the exposed GA every once in a while
+
+    // 05/12/2021 Set the protocol (this is undefined if coming from ild versions
+    if (node.hostProtocol === 'Auto') {
+      // Auto set protocol based on IP
+      if (
+        node.host.startsWith('224.') ||
+        node.host.startsWith('225.') ||
+        node.host.startsWith('232.') ||
+        node.host.startsWith('233.') ||
+        node.host.startsWith('234.') ||
+        node.host.startsWith('235.') ||
+        node.host.startsWith('239.')
+      ) {
+        node.hostProtocol = 'Multicast'
+      } else {
+        const isSecure = node.knxSecureSelected === true || node.knxSecureSelected === 'true'
+        node.hostProtocol = isSecure ? 'TunnelTCP' : 'TunnelUDP'
+      }
+      node.sysLogger?.info('IP Protocol AUTO SET to ' + node.hostProtocol + ', based on IP ' + node.host)
+    }
+    if (node.hostProtocol === 'SerialFT12') {
+      node.host = node.serialPortPath || node.host || '/dev/ttyAMA0'
+    }
+
+    node.setAllClientsStatus = (_status, _color, _text) => {
+      node.nodeClients.forEach((oClient) => {
+        try {
+          if (oClient.setNodeStatus !== undefined) oClient.setNodeStatus({
+            fill: _color,
+            shape: 'dot',
+            text: _status + ' ' + _text,
+            payload: '',
+            GA: oClient.topic,
+            dpt: '',
+            devicename: ''
+          })
+        } catch (error) {
+          node.sysLogger?.warn('Wow setAllClientsStatus error ' + error.message)
+        }
+      })
+    }
+
+    //
+    // KNX-SECURE
+    // Validate keyring (if available) and prepare secure configuration
+    //
+    node.secureTunnelConfig = undefined;
+    (async () => {
+      try {
+        if (node.knxSecureSelected) {
+          const secureMode = typeof node.secureCredentialsMode === 'string' ? node.secureCredentialsMode : 'keyring'
+          const useManual = secureMode === 'manual' || secureMode === 'combined'
+          const useKeyring = secureMode === 'keyring' || secureMode === 'combined'
+
+          const secureConfig = {}
+          const modeParts = []
+
+          if (useManual) {
+            const manualIA = (node.tunnelInterfaceIndividualAddress || '').trim()
+            const manualUserId = (node.tunnelUserId || '').trim()
+            const manualPwd = node.tunnelUserPassword || ''
+
+            if (manualIA) {
+              secureConfig.tunnelInterfaceIndividualAddress = manualIA
+            }
+            if (manualUserId) {
+              secureConfig.tunnelUserId = manualUserId
+            }
+            // Always include password property so KNX library receives the intended value (even if empty)
+            secureConfig.tunnelUserPassword = manualPwd
+            modeParts.push('manual tunnel credentials')
+          }
+
+          if (useKeyring) {
+            secureConfig.knxkeys_file_path = node.keyringFileXML || ''
+            secureConfig.knxkeys_password = node.credentials?.keyringFilePassword || ''
+
+            try {
+              const manualSelectionIA = normalizedTunnelIA(node.tunnelIA)
+              if (node.tunnelIASelection === 'Manual' && manualSelectionIA) {
+                if (!secureConfig.tunnelInterfaceIndividualAddress) {
+                  secureConfig.tunnelInterfaceIndividualAddress = manualSelectionIA
+                }
+              } else if (!secureConfig.tunnelInterfaceIndividualAddress) {
+                secureConfig.tunnelInterfaceIndividualAddress = '' // Auto (let KNX stack select)
+              }
+            } catch (e) { /* empty */ }
+
+            // Optional early validation to give immediate feedback (non-fatal)
+            if (Keyring && node.keyringFileXML && (node.credentials?.keyringFilePassword || '') !== '') {
+              try {
+                const kr = new Keyring()
+                await kr.load(node.keyringFileXML, node.credentials.keyringFilePassword)
+                if (node.loglevel === 'debug') {
+                  try {
+                    const toIAString = (value) => {
+                      if (!value) return ''
+                      return typeof value.toString === 'function' ? value.toString() : String(value)
+                    }
+                    const toBufferString = (value) => {
+                      if (!value) return ''
+                      if (Buffer.isBuffer(value)) return value.toString('hex')
+                      return String(value)
+                    }
+                    const interfaceMap = kr.getInterfaces?.()
+                    const interfaces = Array.from(interfaceMap ? interfaceMap.values() : []).map((iface) => ({
+                      type: iface.type || '',
+                      individualAddress: toIAString(iface.individualAddress),
+                      host: toIAString(iface.host),
+                      userId: typeof iface.userId === 'number' ? iface.userId : '',
+                      password: iface.password || '',
+                      decryptedPassword: iface.decryptedPassword || '',
+                      authentication: iface.authentication || '',
+                      decryptedAuthentication: iface.decryptedAuthentication || '',
+                      groupAddresses: Array.from(iface.groupAddresses ? iface.groupAddresses.entries() : []).map(([ga, senders]) => ({
+                        address: ga,
+                        senders: Array.isArray(senders) ? senders.map(toIAString) : []
+                      }))
+                    }))
+                    const backbones = (kr.getBackbones?.() || []).map((backbone) => ({
+                      multicastAddress: backbone.multicastAddress || '',
+                      latency: typeof backbone.latency === 'number' ? backbone.latency : '',
+                      key: backbone.key || '',
+                      decryptedKey: toBufferString(backbone.decryptedKey)
+                    }))
+                    const groupAddressMap = kr.getGroupAddresses?.()
+                    const groupAddresses = Array.from(groupAddressMap ? groupAddressMap.values() : []).map((group) => ({
+                      address: toIAString(group.address),
+                      key: group.key || '',
+                      decryptedKey: toBufferString(group.decryptedKey)
+                    }))
+                    const deviceMap = kr.getDevices?.()
+                    const devices = Array.from(deviceMap ? deviceMap.values() : []).map((device) => ({
+                      individualAddress: toIAString(device.individualAddress),
+                      toolKey: device.toolKey || '',
+                      decryptedToolKey: toBufferString(device.decryptedToolKey),
+                      managementPassword: device.managementPassword || '',
+                      decryptedManagementPassword: device.decryptedManagementPassword || '',
+                      authentication: device.authentication || '',
+                      decryptedAuthentication: device.decryptedAuthentication || '',
+                      sequenceNumber: typeof device.sequenceNumber === 'number' ? device.sequenceNumber : '',
+                      serialNumber: device.serialNumber || ''
+                    }))
+                    const lines = []
+                    lines.push('================ KNX Secure keyring debug dump ================')
+                    lines.push(`Node: ${node.name || node.id || ''}`)
+                    lines.push(`Created By: ${kr.getCreatedBy?.() || ''}`)
+                    lines.push(`Created On: ${kr.getCreated?.() || ''}`)
+                    lines.push(`Password (node credentials): ${node.credentials?.keyringFilePassword || ''}`)
+                    lines.push('')
+
+                    lines.push('Interfaces:')
+                    if (interfaces.length === 0) {
+                      lines.push('  (none)')
+                    } else {
+                      interfaces.forEach((iface, idx) => {
+                        lines.push(`  [${idx + 1}] ${iface.individualAddress || '(unknown)'} (${iface.type || ''})`)
+                        lines.push(`       Host: ${iface.host || ''}`)
+                        lines.push(`       User ID: ${iface.userId === '' ? '' : iface.userId}`)
+                        lines.push(`       Password (encoded): ${iface.password || ''}`)
+                        lines.push(`       Password (decoded): ${iface.decryptedPassword || ''}`)
+                        lines.push(`       Authentication (encoded): ${iface.authentication || ''}`)
+                        lines.push(`       Authentication (decoded): ${iface.decryptedAuthentication || ''}`)
+                        if (!iface.groupAddresses || iface.groupAddresses.length === 0) {
+                          lines.push('       Group Addresses: (none)')
+                        } else {
+                          lines.push('       Group Addresses:')
+                          iface.groupAddresses.forEach((ga) => {
+                            const senders = ga.senders && ga.senders.length > 0 ? ga.senders.join(', ') : '(none)'
+                            lines.push(`         - ${ga.address}: senders ${senders}`)
+                          })
+                        }
+                        lines.push('')
+                      })
+                    }
+
+                    lines.push('Backbones:')
+                    if (backbones.length === 0) {
+                      lines.push('  (none)')
+                    } else {
+                      backbones.forEach((backbone, idx) => {
+                        lines.push(`  [${idx + 1}] Multicast: ${backbone.multicastAddress || ''}`)
+                        lines.push(`       Latency: ${backbone.latency === '' ? '' : backbone.latency}`)
+                        lines.push(`       Key (encoded): ${backbone.key || ''}`)
+                        lines.push(`       Key (decoded hex): ${backbone.decryptedKey || ''}`)
+                        lines.push('')
+                      })
+                    }
+
+                    lines.push('Group Addresses:')
+                    if (groupAddresses.length === 0) {
+                      lines.push('  (none)')
+                    } else {
+                      groupAddresses.forEach((group, idx) => {
+                        lines.push(`  [${idx + 1}] ${group.address || ''}`)
+                        lines.push(`       Key (encoded): ${group.key || ''}`)
+                        lines.push(`       Key (decoded hex): ${group.decryptedKey || ''}`)
+                        lines.push('')
+                      })
+                    }
+
+                    lines.push('Devices:')
+                    if (devices.length === 0) {
+                      lines.push('  (none)')
+                    } else {
+                      devices.forEach((device, idx) => {
+                        lines.push(`  [${idx + 1}] ${device.individualAddress || ''}`)
+                        lines.push(`       Tool Key (encoded): ${device.toolKey || ''}`)
+                        lines.push(`       Tool Key (decoded hex): ${device.decryptedToolKey || ''}`)
+                        lines.push(`       Management Password (encoded): ${device.managementPassword || ''}`)
+                        lines.push(`       Management Password (decoded): ${device.decryptedManagementPassword || ''}`)
+                        lines.push(`       Authentication (encoded): ${device.authentication || ''}`)
+                        lines.push(`       Authentication (decoded): ${device.decryptedAuthentication || ''}`)
+                        lines.push(`       Sequence Number: ${device.sequenceNumber === '' ? '' : device.sequenceNumber}`)
+                        lines.push(`       Serial Number: ${device.serialNumber || ''}`)
+                        lines.push('')
+                      })
+                    }
+
+                    lines.push('Raw keyring (XML/base64 as provided):')
+                    lines.push(node.keyringFileXML || '(empty)')
+                    lines.push('================ End of keyring debug dump ================')
+
+                    // 2025-10 Privacy: avoid logging full keyring contents to the console/file.
+                    // node.sysLogger?.debug(lines.join('\n'))
+                  } catch (dumpError) {
+                    node.sysLogger?.error('KNX Secure: unable to log keyring details: ' + dumpError.message)
+                  }
+                }
+                const createdBy = kr.getCreatedBy?.() || 'unknown'
+                const created = kr.getCreated?.() || 'unknown'
+                RED.log.info(`KNX-Secure: Keyring validated (Created by ${createdBy} on ${created}) using node ${node.name || node.id}`)
+              } catch (err) {
+                node.sysLogger?.error('KNX Secure: keyring validation failed: ' + err.message)
+                // Keep secure enabled: KNXClient will emit detailed errors on connect
+              }
+            }
+            modeParts.push('keyring file/password')
+          }
+
+          if (Object.keys(secureConfig).length > 0) {
+            node.secureTunnelConfig = secureConfig
+          } else {
+            node.secureTunnelConfig = undefined
+          }
+
+          if (modeParts.length > 0) {
+            RED.log.info(`KNX-Secure: secure mode selected (${modeParts.join(' + ')}). Node ${node.name || node.id}`)
+          }
+        } else {
+          RED.log.info('KNX-Unsecure: connection to insecure interface/router using node ' + (node.name || node.id))
+        }
+      } catch (error) {
+        node.sysLogger?.error('KNX Secure: error preparing secure configuration: ' + error.message)
+        node.secureTunnelConfig = undefined
+        node.knxSecureSelected = false
+        const t = setTimeout(() => node.setAllClientsStatus('Error', 'red', 'KNX Secure ' + error.message), 2000)
+      }
+    })()
+
+    // 04/04/2021 Supergiovane, creates the service paths where the persistent files are created.
+    // The values file is stored only upon disconnection/close
+    // ************************
+    function setupDirectory (_aPath) {
+      if (!fs.existsSync(_aPath)) {
+        // Create the path
+        try {
+          fs.mkdirSync(_aPath)
+          return true
+        } catch (error) {
+          return false
+        }
+      } else {
+        return true
+      }
+    }
+    if (!setupDirectory(node.userDir)) {
+      node.sysLogger?.error('Unable to set up MAIN directory: ' + node.userDir)
+    }
+    if (!setupDirectory(path.join(node.userDir, 'knxpersistvalues'))) {
+      node.sysLogger?.error('Unable to set up cache directory: ' + path.join(node.userDir, 'knxpersistvalues'))
+    } else {
+      node.sysLogger?.info('payload cache set to ' + path.join(node.userDir, 'knxpersistvalues'))
+    }
+
+    async function saveExposedGAs () {
+      const sFile = path.join(node.userDir, 'knxpersistvalues', 'knxpersist' + node.id + '.json')
+      try {
+        if (node.exposedGAs.length > 0) {
+          fs.writeFileSync(sFile, JSON.stringify(node.exposedGAs))
+          // node.sysLogger?.debug("wrote peristent values to the file " + sFile);
+        }
+      } catch (err) {
+        node.sysLogger?.error('unable to write peristent values to the file ' + sFile + ' ' + err.message)
+      }
+    }
+    function loadExposedGAs () {
+      const sFile = path.join(node.userDir, 'knxpersistvalues', 'knxpersist' + node.id + '.json')
+      try {
+        node.exposedGAs = JSON.parse(fs.readFileSync(sFile, 'utf8'))
+        if (!Array.isArray(node.exposedGAs)) node.exposedGAs = []
+      } catch (err) {
+        node.exposedGAs = []
+        node.sysLogger?.info('unable to read peristent file ' + sFile + ' ' + err.message)
+      }
+      node.rebuildExposedGAIndex()
+    }
+
+    // ************************
+
+    // 16/02/2020 KNX-Slim nodes calls this function, then this funcion calls the same function on the Watchdog
+    node.reportToWatchdogCalledByKNXSlimNode = (_oError) => {
+      // _oError is = { nodeid: node.id, topic: node.outputtopic, devicename: devicename, GA: GA, text: text };
+      dispatchWatchDogNodeError(node, _oError)
+    }
+
+    node.addClient = (_Node) => {
+      // Check if node already exists
+      if (node.nodeClients.filter((x) => x.id === _Node.id).length === 0) {
+        // Add _Node to the clients array
+        if (node.autoReconnect) {
+          _Node.setNodeStatus({
+            fill: 'grey',
+            shape: 'ring',
+            text: 'Node initialized.',
+            payload: '',
+            GA: '',
+            dpt: '',
+            devicename: ''
+          })
+        } else {
+          _Node.setNodeStatus({
+            fill: 'red',
+            shape: 'ring',
+            text: 'Autoconnect disabled. Please manually connect.',
+            payload: '',
+            GA: '',
+            dpt: '',
+            devicename: ''
+          })
+        }
+        node.nodeClients.push(_Node)
+      }
+    }
+
+    node.removeClient = async (_Node) => {
+      // Remove the client node from the clients array
+      try {
+        node.nodeClients = node.nodeClients.filter((x) => x.id !== _Node.id)
+      } catch (error) { /* empty */ }
+
+      // If no clien nodes, disconnect from bus.
+      if (node.nodeClients.length === 0) {
+        try {
+          await node.Disconnect()
+        } catch (error) { /* empty */ }
+      }
+    }
+
+    function getUniversalNodeAcceptedGAs (_oNode) {
+      const raw = _oNode?.knxSlimAcceptedGAs
+      if (raw === undefined || raw === null) return null
+      const values = raw instanceof Set ? Array.from(raw) : Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[,\s;]+/) : []
+      return values.map((ga) => String(ga || '').trim()).filter((ga) => ga !== '')
+    }
+
+    function universalNodeAcceptsGA (_oNode, _dest) {
+      const acceptedGAs = getUniversalNodeAcceptedGAs(_oNode)
+      if (acceptedGAs === null || acceptedGAs.length === 0) return true
+      return acceptedGAs.includes(String(_dest || '').trim())
+    }
+
+    // 17/02/2020 Do initial read (called by node.timerDoInitialRead timer)
+    function DoInitialReadFromKNXBusOrFile () {
+      if (node.linkStatus !== 'connected') return // 29/08/2019 If not connected, exit
+      node.sysLogger?.info('Do DoInitialReadFromKNXBusOrFile')
+      loadExposedGAs() // 04/04/2021 load the current values of GA payload
+      node.sysLogger?.info('Loaded persist GA values', node.exposedGAs?.length)
+
+      if (node.timerSaveExposedGAs !== null) clearInterval(node.timerSaveExposedGAs)
+      node.timerSaveExposedGAs = setInterval(async () => {
+        await saveExposedGAs()
+      }, 5000)
+      node.sysLogger?.info('Started timerSaveExposedGAs with array lenght ', node.exposedGAs?.length)
+
+      try {
+        const readHistory = []
+
+        // First, read from file. This allow all virtual devices to get their values from file.
+        node.nodeClients
+          .filter((_oClient) => _oClient.initialread === 2 || _oClient.initialread === 3)
+          .filter((_oClient) => _oClient.hasOwnProperty('isWatchDog') === false)
+          .forEach((_oClient) => {
+            if (node.linkStatus !== 'connected') return // 16/08/2021 If not connected, exit
+
+            // 04/04/2020 selected READ FROM FILE 2 or from file then from bus 3
+            if (_oClient.listenallga === true) {
+              // 13/12/2021 DA FARE
+            } else {
+              try {
+                if (node.exposedGAs.length > 0) {
+                  const oExposedGA = node.getExposedGAEntry(_oClient.topic)
+                  if (oExposedGA !== undefined) {
+                    // Retrieve the value from exposedGAs
+                    const msg = buildInputMessage({
+                      _srcGA: '',
+                      _destGA: _oClient.topic,
+                      _event: 'GroupValue_Response',
+                      _Rawvalue: Buffer.from(oExposedGA.rawValue.data),
+                      _inputDpt: _oClient.dpt,
+                      _devicename: _oClient.name ? _oClient.name : '',
+                      _outputtopic: _oClient.outputtopic,
+                      _oNode: _oClient,
+                      _echoed: false
+                    })
+                    _oClient.previouspayload = '' // 05/04/2021 Added previous payload
+                    _oClient.currentPayload = msg.payload
+                    _oClient.setNodeStatus({
+                      fill: 'grey',
+                      shape: 'dot',
+                      text: 'Update value from persist file',
+                      payload: _oClient.currentPayload,
+                      GA: _oClient.topic,
+                      dpt: _oClient.dpt,
+                      devicename: _oClient.name || ''
+                    })
+                    // 06/05/2021 If, after the rawdata has been savad to file, the user changes the datapoint, the buildInputMessage returns payload null, because it's unable to convert the value
+                    if (msg.payload === null) {
+                      _oClient._hasCurrentPayload = false
+                      // Delete the exposedGA
+                      node.removeExposedGAEntry(_oClient.topic)
+                      _oClient.setNodeStatus({
+                        fill: 'yellow',
+                        shape: 'dot',
+                        text: 'Datapoint has been changed, remove the value from persist file',
+                        payload: _oClient.currentPayload,
+                        GA: _oClient.topic,
+                        dpt: _oClient.dpt,
+                        devicename: _oClient.devicename || ''
+                      })
+                      node.sysLogger?.error('DoInitialReadFromKNXBusOrFile: Datapoint may have been changed, remove the value from persist file of ' + _oClient.topic + ' Devicename ' + _oClient.name + ' Currend DPT ' + _oClient.dpt + ' Node.id ' + _oClient.id)
+                    } else {
+                      // Ensure optional features relying on "currentPayload" (e.g. periodic/cyclic send)
+                      // work also when the value is restored from persist file after a Node-RED restart.
+                      _oClient._hasCurrentPayload = true
+                      if (_oClient.notifyresponse) _oClient.handleSend(msg)
+                    }
+                  } else {
+                    if (_oClient.initialread === 3) {
+                      // Not found, issue a READ to the bus
+                      if (!readHistory.includes(_oClient.topic)) {
+                        node.sysLogger?.debug('DoInitialReadFromKNXBusOrFile 3: sent read request to GA ' + _oClient.topic)
+                        _oClient.setNodeStatus({
+                          fill: 'grey',
+                          shape: 'dot',
+                          text: 'Persist value not found, issuing READ request to BUS',
+                          payload: _oClient.currentPayload,
+                          GA: _oClient.topic,
+                          dpt: _oClient.dpt,
+                          devicename: _oClient.devicename || ''
+                        })
+                        node.sendKNXTelegramToKNXEngine({
+                          grpaddr: _oClient.topic,
+                          payload: '',
+                          dpt: '',
+                          outputtype: 'read',
+                          nodecallerid: _oClient.id
+                        })
+                        readHistory.push(_oClient.topic)
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                node.sysLogger?.error('DoInitialReadFromKNXBusOrFile: ' + error.stack)
+              }
+            }
+          })
+
+        // Then, after all values have been read from file, read from BUS
+        // This allow the virtual devices to get their values before this will be readed from bus
+        node.nodeClients
+          .filter((_oClient) => _oClient.initialread === 1)
+          .filter((_oClient) => _oClient.hasOwnProperty('isWatchDog') === false)
+          .forEach((_oClient) => {
+            if (node.linkStatus !== 'connected') return // 16/08/2021 If not connected, exit
+
+            // 04/04/2020 selected READ FROM BUS 1
+            if (_oClient.hasOwnProperty('isalertnode') && _oClient.isalertnode) {
+              _oClient.initialReadAllDevicesInRules()
+            } else if (_oClient.hasOwnProperty('isLoadControlNode') && _oClient.isLoadControlNode) {
+              _oClient.initialReadAllDevicesInRules()
+            } else if (_oClient.listenallga === true) {
+              const acceptedGAs = getUniversalNodeAcceptedGAs(_oClient)
+              if (acceptedGAs === null) {
+                for (let index = 0; index < node.csv.length; index++) {
+                  const element = node.csv[index]
+                  if (!readHistory.includes(element.ga)) {
+                    node.sendKNXTelegramToKNXEngine({
+                      grpaddr: element.ga,
+                      payload: '',
+                      dpt: '',
+                      outputtype: 'read',
+                      nodecallerid: element.id
+                    })
+                    readHistory.push(element.ga)
+                    node.sysLogger?.debug('DoInitialReadFromKNXBusOrFile from Universal Node: sent read request to GA ' + element.ga)
+                  }
+                }
+              } else {
+                for (let index = 0; index < acceptedGAs.length; index++) {
+                  const ga = acceptedGAs[index]
+                  if (!readHistory.includes(ga)) {
+                    node.sendKNXTelegramToKNXEngine({
+                      grpaddr: ga,
+                      payload: '',
+                      dpt: '',
+                      outputtype: 'read',
+                      nodecallerid: _oClient.id
+                    })
+                    readHistory.push(ga)
+                    node.sysLogger?.debug('DoInitialReadFromKNXBusOrFile from filtered Universal Node: sent read request to GA ' + ga)
+                  }
+                }
+              }
+            } else {
+              if (!readHistory.includes(_oClient.topic)) {
+                node.sendKNXTelegramToKNXEngine({
+                  grpaddr: _oClient.topic,
+                  payload: '',
+                  dpt: '',
+                  outputtype: 'read',
+                  nodecallerid: _oClient.id
+                })
+                readHistory.push(_oClient.topic)
+                node.sysLogger?.debug('DoInitialReadFromKNXBusOrFile: sent read request to GA ' + _oClient.topic)
+              }
+            }
+          })
+      } catch (error) { }
+    }
+
+    // 01/02/2020 Dinamic change of the KNX Gateway IP, Port and Physical Address
+    // This new thing has been requested by proServ RealKNX staff.
+    node.setGatewayConfig = async (
+      /** @type {string} */ _sIP,
+      /** @type {number} */ _iPort,
+      /** @type {string} */ _sPhysicalAddress,
+      /** @type {string} */ _sBindToEthernetInterface,
+      /** @type {string} */ _Protocol,
+      /** @type {string} */ _CSV
+    ) => {
+      if (typeof _sIP !== 'undefined' && _sIP !== '') node.host = _sIP
+      if (typeof _iPort !== 'undefined' && _iPort !== 0) node.port = _iPort
+      if (typeof _sPhysicalAddress !== 'undefined' && _sPhysicalAddress !== '') node.physAddr = _sPhysicalAddress
+      if (typeof _sBindToEthernetInterface !== 'undefined') node.KNXEthInterface = _sBindToEthernetInterface
+      if (typeof _Protocol !== 'undefined') node.hostProtocol = _Protocol
+      if (typeof _CSV !== 'undefined' && _CSV !== '') {
+        try {
+          const sTemp = readCSV(_CSV) // 27/09/2022 Set the new CSV
+          node.csv = sTemp
+        } catch (error) {
+          node.sysLogger?.info("Node's main config setting error. " + error.message || '')
+        }
+      }
+
+      node.sysLogger?.info(
+        "Node's main config setting has been changed. New config: IP " +
+        node.host +
+        ' Port ' +
+        node.port +
+        ' PhysicalAddress ' +
+        node.physAddr +
+        ' BindToInterface ' +
+        node.KNXEthInterface +
+        (typeof _CSV !== 'undefined' && _CSV !== '' ? '. A new group address CSV has been imported.' : '')
+      )
+      if (node.hostProtocol === 'SerialFT12') {
+        node.serialPortPath = node.host
+      }
+
+      try {
+        await node.Disconnect()
+        // node.setKnxConnectionProperties(); // 28/12/2021 Commented
+        node.setAllClientsStatus('CONFIG', 'yellow', 'KNXUltimage-config:setGatewayConfig: disconnected by new setting...')
+        node.sysLogger?.debug('KNXUltimage-config:setGatewayConfig: disconnected by setGatewayConfig.')
+      } catch (error) { }
+    }
+
+    // 05/05/2021 force connection or disconnection from the KNX BUS and disable the autoreconenctions attempts.
+    // This new thing has been requested by proServ RealKNX staff.
+    node.connectGateway = async (_bConnection) => {
+      if (_bConnection === undefined) return
+      node.sysLogger?.info(
+        (_bConnection === true ? 'Forced connection from watchdog' : 'Forced disconnection from watchdog') +
+        node.host +
+        ' Port ' +
+        node.port +
+        ' PhysicalAddress ' +
+        node.physAddr +
+        ' BindToInterface ' +
+        node.KNXEthInterface
+      )
+      if (_bConnection === true) {
+        // CONNECT AND ENABLE RECONNECTION ATTEMPTS
+        try {
+          await node.Disconnect()
+          node.setAllClientsStatus('CONFIG', 'yellow', 'Forced GW connection from watchdog.')
+          node.autoReconnect = true
+        } catch (error) { }
+      } else {
+        // DISCONNECT AND DISABLE RECONNECTION ATTEMPTS
+        try {
+          node.autoReconnect = false
+          await node.Disconnect()
+          const t = setTimeout(() => {
+            // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+            node.setAllClientsStatus('CONFIG', 'yellow', 'Forced GW disconnection and stop reconnection attempts, from watchdog.')
+          }, 2000)
+        } catch (error) { }
+      }
+    }
+
+    node.setKnxConnectionProperties = async () => {
+      // 25/08/2021 Moved out of node.initKNXConnection
+      node.knxConnectionProperties = {
+        ipAddr: node.host,
+        ipPort: node.port,
+        physAddr: node.physAddr, // the KNX physical address we'd like to use
+        suppress_ack_ldatareq: node.suppressACKRequest,
+        loglevel: node.loglevel,
+        hostProtocol: node.hostProtocol,
+        isSecureKNXEnabled: node.knxSecureSelected,
+        secureTunnelConfig: node.knxSecureSelected ? node.secureTunnelConfig : undefined,
+        localIPAddress: '', // Riempito da KNXEngine
+        KNXQueueSendIntervalMilliseconds: Number(node.delaybetweentelegrams),
+        connectionKeepAliveTimeout: 30 // Every 30 seconds, send a connectionstatus_request
+      }
+      const isSerialProtocol = node.hostProtocol === 'SerialFT12'
+      if (isSerialProtocol) {
+        const serialPath = node.serialPortPath || node.host || '/dev/ttyAMA0'
+        node.knxConnectionProperties.ipAddr = serialPath
+        node.knxConnectionProperties.serialInterface = {
+          path: serialPath,
+          baudRate: node.serialBaudRate,
+          dataBits: node.serialDataBits,
+          stopBits: node.serialStopBits,
+          parity: node.serialParity,
+          rtscts: !!node.serialRtscts,
+          dtr: !!node.serialDtr,
+          timeoutMs: node.serialTimeout,
+          isKBERRY: node.isKBERRY
+        }
+        try {
+          delete node.knxConnectionProperties.interface
+        } catch (error) { }
+      } else {
+        try {
+          delete node.knxConnectionProperties.serialInterface
+        } catch (error) { }
+        // 11/07/2022 Test if the IP is a valid one or is a DNS Name
+        switch (net.isIP(node.host)) {
+          case 0:
+            // Invalid IP, resolve the DNS name.
+            let resolvedIP = null
+            try {
+              resolvedIP = await resolveHostAddress(node.host)
+            } catch (error) {
+              throw new Error('net.isIP: INVALID IP OR DNS NAME. Error checking the Gateway Host in Config node. ' + error.message)
+            }
+            if (resolvedIP === null || net.isIP(resolvedIP) === 0) {
+              // Error in resolving DNS Name
+              node.sysLogger?.error(
+                'net.isIP: INVALID IP OR DNS NAME. Check the Gateway Host in Config node ' + node.name + ' ' + node.host
+              )
+              throw new Error('net.isIP: INVALID IP OR DNS NAME. Check the Gateway Host in Config node.')
+            }
+            node.sysLogger?.info(
+              'net.isIP: The gateway is not specified as IP. The DNS resolver pointed me to the IP ' +
+              node.host +
+              ', in Config node ' +
+              node.name
+            )
+            node.knxConnectionProperties.ipAddr = resolvedIP
+          case 4:
+            // It's an IPv4
+            break
+          case 6:
+            // It's an IPv6
+            break
+          default:
+            break
+        }
+
+        if (node.KNXEthInterface !== 'Auto') {
+          let sIfaceName = ''
+          if (node.KNXEthInterface === 'Manual') {
+            sIfaceName = node.KNXEthInterfaceManuallyInput
+            node.sysLogger?.info('Bind KNX Bus to interface : ' + sIfaceName + " (Interface's name entered by hand). Node " + node.name)
+          } else {
+            sIfaceName = node.KNXEthInterface
+            node.sysLogger?.info(
+              'Bind KNX Bus to interface : ' + sIfaceName + " (Interface's name selected from dropdown list). Node " + node.name
+            )
+          }
+          node.knxConnectionProperties.interface = sIfaceName
+        } else {
+          // Remove any manual binding and try to auto-select based on subnet
+          try {
+            delete node.knxConnectionProperties.interface
+          } catch (error) { }
+          const targetIP = node.knxConnectionProperties?.ipAddr || node.host
+          const autoInterface = typeof targetIP === 'string' ? findAutoEthernetInterface(targetIP) : null
+          if (autoInterface && autoInterface.name) {
+            node.knxConnectionProperties.interface = autoInterface.name
+            const maskInfo = autoInterface.netmask
+              ? autoInterface.netmask + (autoInterface.maskBits ? ' (' + autoInterface.maskBits + ')' : '')
+              : (autoInterface.maskBits ? String(autoInterface.maskBits) : 'mask unknown')
+            node.sysLogger?.info(
+              'Bind KNX Bus to interface (Auto) -> ' +
+              autoInterface.name +
+              ' (' + autoInterface.address + ' ' + maskInfo + ')' +
+              '. Node ' + node.name
+            )
+          } else {
+            node.sysLogger?.info(
+              'Bind KNX Bus to interface (Auto). Node ' +
+              node.name +
+              (targetIP ? ' - no matching local interface found for ' + targetIP + '.' : '.')
+            )
+          }
+        }
+      }
+    }
+    // node.setKnxConnectionProperties(); 28/12/2021 Commented
+
+    node.initKNXConnection = async () => {
+      try {
+        await node.setKnxConnectionProperties() // 28/12/2021 Added
+      } catch (error) {
+        node.sysLogger?.error('setKnxConnectionProperties: ' + error.message)
+        if (node.linkStatus !== 'disconnected') await node.Disconnect()
+        return
+      }
+
+      // 12/08/2021 Avoid start connection if there are no knx-slim nodes linked to this gateway
+      // At start, initKNXConnection is already called only if the gateway has clients, but in the successive calls from the error handler, this check is not done.
+      if (node.nodeClients.length === 0) {
+        try {
+          node.sysLogger?.info('No nodes linked to this gateway ' + node.name)
+          try {
+            if (node.linkStatus !== 'disconnected') await node.Disconnect()
+          } catch (error) { }
+          return
+        } catch (error) { }
+      }
+
+      try {
+        // 02/01/2022 This is important to free the tunnel in case of hard disconnection.
+        await node.Disconnect()
+      } catch (error) {
+        // node.sysLogger?.info(error)
+      }
+
+      try {
+        // Unsetting handlers if node.knxConnection was existing
+        try {
+          if (node.knxConnection !== null && node.knxConnection !== undefined) {
+            await node.knxConnection.Disconnect()
+            node.sysLogger?.debug('removing old handlers. Node ' + node.name)
+            node.knxConnection.removeAllListeners()
+            // The orphaned client may still emit a late async 'error' (e.g. the KNX Secure
+            // IA discovery timing out): with no listener, emit('error') would CRASH the
+            // whole process. Keep a swallow-all handler on it.
+            node.knxConnection.on(knx.KNXClientEvents.error, () => { })
+          }
+        } catch (error) {
+          node.sysLogger?.info('BANANA ERRORINO', error)
+        }
+
+        // node.knxConnectionProperties.localSocketAddress = { address: '192.168.2.2', port: 59000 }
+        node.knxConnection = new knx.KNXClient(node.knxConnectionProperties)
+
+        // Setting handlers
+        // ######################################
+        node.knxConnection.on(knx.KNXClientEvents.indication, handleBusEvents)
+        node.knxConnection.on(knx.KNXClientEvents.error, (err) => {
+          try {
+            node.sysLogger?.error('received KNXClientEvents.error: ' + (err.message === undefined ? err : err.message))
+          } catch (error) {
+          }
+          // 31/03/2022 Don't care about some errors
+          if (err.message !== undefined && (err.message === 'ROUTING_LOST_MESSAGE' || err.message === 'ROUTING_BUSY')) {
+            node.sysLogger?.error(
+              'KNXClientEvents.error: ' +
+              (err.message === undefined ? err : err.message) +
+              " consider DECREASING the transmission speed, by increasing the telegram's DELAY in the gateway configuration node!"
+            )
+            return
+          }
+          node.Disconnect('Disconnected by error ' + (err.message === undefined ? err : err.message), 'red')
+          node.sysLogger?.error('Disconnected by: ' + (err.message === undefined ? err : err.message))
+        })
+
+        node.knxConnection.on(knx.KNXClientEvents.disconnected, (info) => {
+          if (node.linkStatus !== 'disconnected') {
+            node.linkStatus = 'disconnected'
+            node.sysLogger?.warn('Disconnected event %s', info)
+            node.Disconnect('Disconnected by event: ' + info || '', 'red') // 11/03/2022
+          }
+        })
+        node.knxConnection.on(knx.KNXClientEvents.close, (info) => {
+          node.sysLogger?.debug('KNXClient socket closed.')
+          node.linkStatus = 'disconnected'
+        })
+        node.knxConnection.on(knx.KNXClientEvents.connected, (info) => {
+          node.linkStatus = 'connected'
+
+          // Track serial driver for forced close on redeploy
+          if (node.hostProtocol === 'SerialFT12' && node.knxConnection && node.knxConnection._serialDriver) {
+            node.serialDriverRef = node.knxConnection._serialDriver
+          }
+
+          // Start the timer to do initial read.
+          if (node.timerDoInitialRead !== null) clearTimeout(node.timerDoInitialRead)
+          node.timerDoInitialRead = setTimeout(() => {
+            try {
+              DoInitialReadFromKNXBusOrFile()
+            } catch (error) {
+              node.sysLogger?.error('DoInitialReadFromKNXBusOrFile ' + error.stack)
+            }
+          }, 1000) // 17/02/2020 Do initial read of all nodes requesting initial read
+          const t = setTimeout(() => {
+            // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+            node.setAllClientsStatus('Connected.', 'green', 'On duty.')
+          }, 500)
+          node.sysLogger?.info('Connected to %o', info)
+        })
+        node.knxConnection.on(knx.KNXClientEvents.connecting, (info) => {
+          node.linkStatus = 'connecting'
+          node.sysLogger?.debug('Connecting to' + info.ipAddr || '')
+          node.setAllClientsStatus(info.ipAddr || '', 'grey', 'Connecting...')
+        })
+        // ######################################
+
+        node.setAllClientsStatus('Connecting... ', 'grey', '')
+        node.sysLogger?.info('perform websocket connection on ' + node.name)
+        try {
+          node.sysLogger?.info('Connecting... ' + node.name)
+          node.knxConnection.Connect()
+        } catch (error) {
+          node.sysLogger?.error('node.knxConnection.Connect() ' + node.name + ': ' + error.message)
+          node.linkStatus = 'disconnected'
+          throw error
+        }
+      } catch (error) {
+        if (node.sysLogger !== null) {
+          node.sysLogger.error('Error in instantiating knxConnection ' + error.stack + ' Node ' + node.name)
+          node.error('KNXSlim-config: Error in instantiating knxConnection ' + error.message + ' Node ' + node.name)
+        }
+        node.linkStatus = 'disconnected'
+        // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+        const t = setTimeout(() => node.setAllClientsStatus('Error in instantiating knxConnection ' + error.message, 'red', 'Error'), 200)
+      }
+    }
+
+    // Handle BUS events
+    // ---------------------------------------------------------------------------------------
+    function handleBusEvents (_datagram, _echoed) {
+      // console.time('handleBusEvents');
+
+      let _rawValue = null
+      try {
+        _rawValue = _datagram.cEMIMessage.npdu.dataValue
+      } catch (error) {
+        return
+      }
+
+      let _evt = null
+      if (_datagram.cEMIMessage.npdu.isGroupRead) _evt = 'GroupValue_Read'
+      if (_datagram.cEMIMessage.npdu.isGroupResponse) _evt = 'GroupValue_Response'
+      if (_datagram.cEMIMessage.npdu.isGroupWrite) _evt = 'GroupValue_Write'
+
+      let _src = null
+      _src = _datagram.cEMIMessage.srcAddress.toString()
+
+      let _dest = null
+      _dest = _datagram.cEMIMessage.dstAddress.toString()
+
+      if (_evt === null || _src === null || _dest === null) {
+        node.sysLogger?.warn(`HandleBusEvent: unable to parse telegram, ignored (evt=${_evt || 'n/a'} src=${_src || 'n/a'} dest=${_dest || 'n/a'})`)
+        return
+      };
+
+      _echoed = _echoed || false
+
+      const isRepeated = _datagram.cEMIMessage.control.repeat !== 1
+      // 06/06/2021 Supergiovane: check if i can handle the telegrams with "Repeated" flag
+      if (node.ignoreTelegramsWithRepeatedFlag === true && isRepeated) {
+        node.sysLogger?.warn('Ignored telegram with Repeated Flag ' + _evt + ' Src:' + _src + ' Dest:' + _dest)
+        return
+      }
+
+      // 23/03/2021 Supergiovane: Added the CEMI telegram for ETS Diagnostic
+      // #####################################################################
+      let _cemiETS = ''
+      if (_echoed) {
+        // I'm sending a telegram to the BUS in Tunneling mode, with echo enabled.
+        // Tunnel: TX to BUS: OK
+        try {
+          const sCemiFromDatagram = _datagram.cEMIMessage.toBuffer().toString('hex')
+          _cemiETS = '2900BCD0' + sCemiFromDatagram.substr(8)
+        } catch (error) {
+          _cemiETS = ''
+        }
+      } else {
+        try {
+          // Multicast: RX from BUS: OK
+          // Multicast TX to BUS: OK
+          // Tunnel: RX from BUS: OK
+          // Tunnel: TX to BUS: see the _echoed above
+          _cemiETS = _datagram.cEMIMessage.toBuffer().toString('hex')
+        } catch (error) {
+          _cemiETS = ''
+        }
+      }
+      // #####################################################################
+
+      // Prepare RAW APDU info (for Multi Routing nodes)
+      let _apduData = null
+      let _apduBitLength = 0
+      let _apduHex = ''
+      try {
+        if (_evt !== 'GroupValue_Read') {
+          _apduData = Buffer.from(_rawValue)
+          // If NPDU dataBuffer is null, the payload is encoded in APCI low bits (<= 6 bits).
+          // We can't know the exact DPT length here, so keep it <= 6 to preserve encoding style.
+          _apduBitLength = (_datagram.cEMIMessage && _datagram.cEMIMessage.npdu && _datagram.cEMIMessage.npdu.dataBuffer === null) ? 6 : (_apduData.length * 8)
+          _apduHex = _apduData.toString('hex')
+        }
+      } catch (error) {
+        _apduData = null
+        _apduBitLength = 0
+        _apduHex = ''
+      }
+
+      // 04/04/2021 Supergiovane: save value to node.exposedGAs
+      if (typeof _dest === 'string' && _rawValue !== undefined && (_evt === 'GroupValue_Write' || _evt === 'GroupValue_Response')) {
+        try {
+          const ret = { ga: _dest, rawValue: _rawValue, dpt: undefined, devicename: undefined, updatedAt: Date.now() }
+          if (node.csvByGa.size > 0) {
+            const found = node.csvByGa.get(_dest)
+            if (found !== undefined) {
+              ret.dpt = found.dpt
+              ret.devicename = found.devicename
+            }
+          }
+          node.upsertExposedGAEntry(ret)
+        } catch (error) { }
+      }
+
+      switch (_evt) {
+        case 'GroupValue_Write':
+          // console.time('GroupValue_Write'); // 05/04/2022 Fatto test velocità tra for..loop e forEach. E' risultato sempre comunque più veloce il forEach!
+          node.nodeClients
+            .filter((_input) => _input.notifywrite === true)
+            .forEach((_input) => {
+              try {
+                if (_input.hasOwnProperty('isMultiRouting')) {
+                  const msg = {
+                    topic: _input.outputtopic || _dest,
+                    payload: {
+                      knx: {
+                        event: _evt,
+                        source: _src,
+                        destination: _dest,
+                        apdu: { data: _apduData, bitlength: _apduBitLength, hex: _apduHex },
+                        cemi: { hex: _cemiETS },
+                        echoed: _echoed,
+                        repeated: isRepeated,
+                        repeat: isRepeated
+                      },
+                      knxMultiRouting: {
+                        gateway: { id: node.id, name: node.name || '', physAddr: node.physAddr || '' },
+                        receivedAt: Date.now()
+                      }
+                    }
+                  }
+                  _input.setNodeStatus({ fill: 'green', shape: 'dot', text: 'RAW', payload: _evt, GA: _dest, dpt: '', devicename: _src })
+                  _input.handleSend(msg)
+                } else
+                // 21/10/2024 check wether is a HUE device
+                if (_input.type.includes('knxSlimHue')) {
+                  const msg = {
+                    knx: {
+                      event: _evt,
+                      destination: _dest,
+                      rawValue: _rawValue,
+                      repeated: isRepeated,
+                      repeat: isRepeated
+                    }
+                  }
+                  _input.handleSend(msg)
+                } else if (_input.hasOwnProperty('isSceneController')) { // 19/03/2020 in the middle of coronavirus. Whole italy is red zone, closed down. Scene Controller implementation
+                  // 12/08/2020 Check wether is a learn (save) command or a activate (play) command.
+                  if (_dest === _input.topic || _dest === _input.topicSave) {
+                    // Prepare the two messages to be evaluated directly into the Scene Controller node.
+                    new Promise((resolve) => {
+                      if (_dest === _input.topic) {
+                        try {
+                          const msgRecall = buildInputMessage({
+                            _srcGA: _src,
+                            _destGA: _dest,
+                            _event: _evt,
+                            _Rawvalue: _rawValue,
+                            _inputDpt: _input.dpt,
+                            _devicename: _input.name ? _input.name : '',
+                            _outputtopic: _input.outputtopic,
+                            _oNode: null,
+                            _echoed,
+                            _repeated: isRepeated
+                          })
+                          _input.RecallScene(msgRecall.payload, false)
+                        } catch (error) { }
+                      } // 12/08/2020 Do NOT use "else", because both topics must be evaluated in case both recall and save have same group address.
+                      if (_dest === _input.topicSave) {
+                        try {
+                          const msgSave = buildInputMessage({
+                            _srcGA: _src,
+                            _destGA: _dest,
+                            _event: _evt,
+                            _Rawvalue: _rawValue,
+                            _inputDpt: _input.dptSave,
+                            _devicename: _input.name || '',
+                            _outputtopic: _dest,
+                            _oNode: null,
+                            _echoed,
+                            _repeated: isRepeated
+                          })
+                          _input.SaveScene(msgSave.payload, false)
+                        } catch (error) { }
+                      }
+                      resolve(true) // fulfilled
+                      // reject("error"); // rejected
+                    })
+                      .then(function () { })
+                      .catch(function () { })
+                  } else {
+                    // 19/03/2020 Check and Update value if the input is part of a scene controller
+                    new Promise((resolve) => {
+                      // Check and update the values of each device in the scene and update the rule array accordingly.
+                      for (let i = 0; i < _input.rules.length; i++) {
+                        // rule is { topic: rowRuleTopic, devicename: rowRuleDeviceName, dpt:rowRuleDPT, send: rowRuleSend}
+                        const oDevice = _input.rules[i]
+                        if (typeof oDevice !== 'undefined' && oDevice.topic == _dest) {
+                          const msg = buildInputMessage({
+                            _srcGA: _src,
+                            _destGA: _dest,
+                            _event: _evt,
+                            _Rawvalue: _rawValue,
+                            _inputDpt: oDevice.dpt,
+                            _devicename: oDevice.name || '',
+                            _outputtopic: oDevice.outputtopic,
+                            _oNode: null,
+                            _echoed,
+                            _repeated: isRepeated
+                          })
+                          oDevice.currentPayload = msg.payload
+                          _input.setNodeStatus({
+                            fill: 'grey',
+                            shape: 'dot',
+                            text: 'Update dev in scene',
+                            payload: oDevice.currentPayload,
+                            GA: oDevice.topic,
+                            dpt: oDevice.dpt,
+                            devicename: oDevice.devicename || ''
+                          })
+                          break
+                        }
+                      }
+                      resolve(true) // fulfilled
+                      // reject("error"); // rejected
+                    })
+                      .then(function () { })
+                      .catch(function () { })
+                  }
+                } else if (_input.listenallga === true && universalNodeAcceptsGA(_input, _dest)) {
+                  // 25/10/2019 TRY TO AUTO DECODE IF Group address not found in the CSV
+                  const msg = buildInputMessage({
+                    _srcGA: _src,
+                    _destGA: _dest,
+                    _event: _evt,
+                    _Rawvalue: _rawValue,
+                    _outputtopic: _dest,
+                    _oNode: _input,
+                    _echoed,
+                    _repeated: isRepeated
+                  })
+                  _input.setNodeStatus({
+                    fill: 'green',
+                    shape: 'dot',
+                    text: '',
+                    payload: msg.payload,
+                    GA: msg.knx.destination,
+                    dpt: msg.knx.dpt,
+                    devicename: msg.devicename
+                  })
+                  _input.handleSend(msg)
+                } else if (_input.topic == _dest) {
+                  if (_input.hasOwnProperty('isWatchDog')) {
+                    // 04/02/2020 Watchdog implementation
+                    // Is a watchdog node
+                  } else {
+                    const msg = buildInputMessage({
+                      _srcGA: _src,
+                      _destGA: _dest,
+                      _event: _evt,
+                      _Rawvalue: _rawValue,
+                      _inputDpt: _input.dpt,
+                      _devicename: _input.name ? _input.name : '',
+                      _outputtopic: _input.outputtopic,
+                      _oNode: _input,
+                      _echoed,
+                      _repeated: isRepeated
+                    })
+                    // Check RBE INPUT from KNX Bus, to avoid send the payload to the flow, if it's equal to the current payload
+                    if (!checkRBEInputFromKNXBusAllowSend(_input, msg.payload)) {
+                      _input.setNodeStatus({
+                        fill: 'grey',
+                        shape: 'ring',
+                        text: 'rbe block (' + msg.payload + ') from KNX',
+                        payload: '',
+                        GA: '',
+                        dpt: '',
+                        devicename: ''
+                      })
+                      return
+                    }
+                    msg.previouspayload = typeof _input.currentPayload !== 'undefined' ? _input.currentPayload : '' // 24/01/2020 Added previous payload
+                    _input.currentPayload = msg.payload // Set the current value for the RBE input
+                    _input.setNodeStatus({
+                      fill: 'green',
+                      shape: 'dot',
+                      text: '',
+                      payload: msg.payload,
+                      GA: _input.topic,
+                      dpt: _input.dpt,
+                      devicename: ''
+                    })
+                    _input.handleSend(msg)
+                  }
+                }
+              } catch (errDispatch) { node.sysLogger?.error('KNX dispatch client error: ' + (errDispatch && errDispatch.message)) }
+            })
+          // console.timeEnd('GroupValue_Write');
+          break
+
+        case 'GroupValue_Response':
+          node.nodeClients
+            .filter((_input) => _input.notifyresponse === true)
+            .forEach((_input) => {
+              try {
+                if (_input.hasOwnProperty('isMultiRouting')) {
+                  const msg = {
+                    topic: _input.outputtopic || _dest,
+                    payload: {
+                      knx: {
+                        event: _evt,
+                        source: _src,
+                        destination: _dest,
+                        apdu: { data: _apduData, bitlength: _apduBitLength, hex: _apduHex },
+                        cemi: { hex: _cemiETS },
+                        echoed: _echoed,
+                        repeated: isRepeated,
+                        repeat: isRepeated
+                      },
+                      knxMultiRouting: {
+                        gateway: { id: node.id, name: node.name || '', physAddr: node.physAddr || '' },
+                        receivedAt: Date.now()
+                      }
+                    }
+                  }
+                  _input.setNodeStatus({ fill: 'blue', shape: 'dot', text: 'RAW', payload: _evt, GA: _dest, dpt: '', devicename: _src })
+                  _input.handleSend(msg)
+                } else if (_input.listenallga === true && universalNodeAcceptsGA(_input, _dest)) {
+                  const msg = buildInputMessage({
+                    _srcGA: _src,
+                    _destGA: _dest,
+                    _event: _evt,
+                    _Rawvalue: _rawValue,
+                    _outputtopic: _dest,
+                    _oNode: _input,
+                    _echoed,
+                    _repeated: isRepeated
+                  })
+                  _input.setNodeStatus({
+                    fill: 'blue',
+                    shape: 'dot',
+                    text: '',
+                    payload: msg.payload,
+                    GA: msg.knx.destination,
+                    dpt: msg.knx.dpt,
+                    devicename: msg.devicename
+                  })
+                  _input.handleSend(msg)
+                } else if (_input.topic === _dest) {
+                  // 04/02/2020 Watchdog implementation
+                  if (_input.hasOwnProperty('isWatchDog')) {
+                    // Is a watchdog node
+                    _input.watchDogTimerReset()
+                  } else {
+                    const msg = buildInputMessage({
+                      _srcGA: _src,
+                      _destGA: _dest,
+                      _event: _evt,
+                      _Rawvalue: _rawValue,
+                      _inputDpt: _input.dpt,
+                      _devicename: _input.name ? _input.name : '',
+                      _outputtopic: _input.outputtopic,
+                      _oNode: _input,
+                      _echoed,
+                      _repeated: isRepeated
+                    })
+                    // Check RBE INPUT from KNX Bus, to avoid send the payload to the flow, if it's equal to the current payload
+                    if (!checkRBEInputFromKNXBusAllowSend(_input, msg.payload)) {
+                      _input.setNodeStatus({
+                        fill: 'grey',
+                        shape: 'ring',
+                        text: 'rbe INPUT filter applied on ' + msg.payload,
+                        payload: msg.payload,
+                        GA: _dest
+                      })
+                      return
+                    }
+                    msg.previouspayload = typeof _input.currentPayload !== 'undefined' ? _input.currentPayload : '' // 24/01/2020 Added previous payload
+                    _input.currentPayload = msg.payload // Set the current value for the RBE input
+                    _input.setNodeStatus({
+                      fill: 'blue',
+                      shape: 'dot',
+                      text: '',
+                      payload: msg.payload,
+                      GA: _input.topic,
+                      dpt: msg.knx.dpt,
+                      devicename: msg.devicename
+                    })
+                    _input.handleSend(msg)
+                  }
+                }
+              } catch (errDispatch) { node.sysLogger?.error('KNX dispatch client error: ' + (errDispatch && errDispatch.message)) }
+            })
+          break
+
+        case 'GroupValue_Read':
+          node.nodeClients
+            .filter((_input) => _input.notifyreadrequest === true)
+            .forEach((_input) => {
+              try {
+                if (_input.hasOwnProperty('isMultiRouting')) {
+                  const msg = {
+                    topic: _input.outputtopic || _dest,
+                    payload: {
+                      knx: {
+                        event: _evt,
+                        source: _src,
+                        destination: _dest,
+                        apdu: { data: null, bitlength: 0, hex: '' },
+                        cemi: { hex: _cemiETS },
+                        echoed: _echoed,
+                        repeated: isRepeated,
+                        repeat: isRepeated
+                      },
+                      knxMultiRouting: {
+                        gateway: { id: node.id, name: node.name || '', physAddr: node.physAddr || '' },
+                        receivedAt: Date.now()
+                      }
+                    }
+                  }
+                  _input.setNodeStatus({ fill: 'grey', shape: 'dot', text: 'RAW Read', payload: '', GA: _dest, dpt: '', devicename: _src })
+                  _input.handleSend(msg)
+                } else if (_input.listenallga === true && universalNodeAcceptsGA(_input, _dest)) {
+                  // Read Request
+                  const msg = buildInputMessage({
+                    _srcGA: _src,
+                    _destGA: _dest,
+                    _event: _evt,
+                    _Rawvalue: null,
+                    _outputtopic: _dest,
+                    _oNode: _input,
+                    _echoed,
+                    _repeated: isRepeated
+                  })
+                  _input.setNodeStatus({
+                    fill: 'grey',
+                    shape: 'dot',
+                    text: 'Read',
+                    payload: '',
+                    GA: msg.knx.destination,
+                    dpt: msg.knx.dpt,
+                    devicename: msg.devicename
+                  })
+                  _input.handleSend(msg)
+                } else if (_input.topic === _dest) {
+                  // 04/02/2020 Watchdog implementation
+                  if (_input.hasOwnProperty('isWatchDog')) {
+                    // Is a watchdog node
+                  } else {
+                    // Read Request
+                    const msg = buildInputMessage({
+                      _srcGA: _src,
+                      _destGA: _dest,
+                      _event: _evt,
+                      _Rawvalue: null,
+                      _inputDpt: _input.dpt,
+                      _devicename: _input.name || '',
+                      _outputtopic: _input.outputtopic,
+                      _oNode: _input,
+                      _echoed,
+                      _repeated: isRepeated
+                    })
+                    msg.previouspayload = typeof _input.currentPayload !== 'undefined' ? _input.currentPayload : '' // 24/01/2020 Reset previous payload
+                    // 24/09/2019 Autorespond to BUS
+                    if (_input.hasOwnProperty('notifyreadrequestalsorespondtobus') && _input.notifyreadrequestalsorespondtobus === true) {
+                      if (typeof _input.currentPayload === 'undefined' || _input.currentPayload === '' || _input.currentPayload === null) {
+                        // 14/08/2021 Added || input.currentPayload === null
+                        node.sendKNXTelegramToKNXEngine({
+                          grpaddr: _dest,
+                          payload: _input.notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized,
+                          dpt: _input.dpt,
+                          outputtype: 'response',
+                          nodecallerid: _input.id
+                        })
+                        _input.setNodeStatus({
+                          fill: 'blue',
+                          shape: 'ring',
+                          text: 'Read & Autorespond with default',
+                          payload: _input.notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized,
+                          GA: _input.topic,
+                          dpt: msg.knx.dpt,
+                          devicename: ''
+                        })
+                      } else {
+                        node.sendKNXTelegramToKNXEngine({
+                          grpaddr: _dest,
+                          payload: _input.currentPayload,
+                          dpt: _input.dpt,
+                          outputtype: 'response',
+                          nodecallerid: _input.id
+                        })
+                        _input.setNodeStatus({
+                          fill: 'blue',
+                          shape: 'ring',
+                          text: 'Read & Autorespond',
+                          payload: _input.currentPayload,
+                          GA: _input.topic,
+                          dpt: msg.knx.dpt,
+                          devicename: ''
+                        })
+                      }
+                    } else {
+                      _input.setNodeStatus({
+                        fill: 'grey',
+                        shape: 'dot',
+                        text: 'Read',
+                        payload: msg.payload,
+                        GA: _input.topic,
+                        dpt: msg.knx.dpt,
+                        devicename: ''
+                      })
+                    }
+                    _input.handleSend(msg)
+                  }
+                }
+              } catch (errDispatch) { node.sysLogger?.error('KNX dispatch client error: ' + (errDispatch && errDispatch.message)) }
+            })
+          break
+
+        default:
+      }
+      // console.timeEnd('handleBusEvents');
+    }
+    // END Handle BUS events---------------------------------------------------------------------------------------
+
+    // oKNXMessage is { grpaddr, payload,dpt,outputtype (write or response),nodecallerid (node caller)}. 06/03/2020 "Read" request does have the lower priority in the queue, so firstly, i search for "read" telegrams and i move it on the top of the queue pile.
+    node.sendKNXTelegramToKNXEngine = (_oKNXMessage) => {
+      if (node.knxConnection === null || node.linkStatus !== 'connected') return
+
+      // 26/12/2021 The KNXEngine is busy waiting for telegram's ACK. Strange.
+      if (!node.knxConnection.clearToSend) {
+        node.sysLogger?.warn(
+          'sendKNXTelegramToKNXEngine: the KNXEngine is busy or is waiting for a telegram ACK with seqNumner ' +
+          node.knxConnection.getCurrentItemHandledByTheQueue() +
+          '. Delay handling queue.'
+        )
+      }
+
+      // 19/01/2023 FORMATTING THE OUTPUT PAYLOAD (ROUND, ETC) BASED ON THE NODE CONFIG
+      //* ********************************************************
+      if (_oKNXMessage.outputtype === 'read') {
+        try {
+          _oKNXMessage.payload = payloadRounder.Manipulate(RED.nodes.getNode(_oKNXMessage.nodecallerid), _oKNXMessage.payload)
+        } catch (error) {
+          node.sysLogger?.error(
+            'sendKNXTelegramToKNXEngine: Sacripante Manipulate payload: ' + error.message
+          )
+        }
+      }
+      //* ********************************************************
+
+      if (_oKNXMessage.outputtype === 'response') {
+        try {
+          node.knxConnection.respond(_oKNXMessage.grpaddr, _oKNXMessage.payload, _oKNXMessage.dpt)
+        } catch (error) {
+          try {
+            const oNode = RED.nodes.getNode(_oKNXMessage.nodecallerid) // 05/04/2022 Get the real node
+            oNode.setNodeStatus({
+              fill: 'red',
+              shape: 'dot',
+              text: 'Send response ' + error,
+              payload: _oKNXMessage.payload,
+              GA: _oKNXMessage.grpaddr,
+              dpt: _oKNXMessage.dpt,
+              devicename: ''
+            })
+          } catch (error) { }
+        }
+      } else if (_oKNXMessage.outputtype === 'read') {
+        try {
+          node.knxConnection.read(_oKNXMessage.grpaddr)
+        } catch (error) { }
+      } else if (_oKNXMessage.outputtype === 'update') {
+        // 05/01/2021 Update don't send anything to the bus, but instead updates the values of all nodes belonging to the group address passed
+        // oKNXMessage = {
+        //     grpaddr: '5/0/1',
+        //     payload: true,
+        //     dpt: '1.001',
+        //     outputtype: 'update',
+        //     nodecallerid: 'd104af91.31da18'
+        //   }
+        try {
+          node.nodeClients.forEach((_input) => {
+            // 19/03/2020 in the middle of coronavirus. Whole italy is red zone, closed down. Scene Controller implementation
+            if (_input.hasOwnProperty('isSceneController')) {
+            } else if (_input.listenallga === true) {
+            } else if (_input.topic == _oKNXMessage.grpaddr) {
+              if (_input.hasOwnProperty('isWatchDog')) {
+                // 04/02/2020 Watchdog implementation
+                // Is a watchdog node
+              } else {
+                const msg = {
+                  topic: _input.outputtopic,
+                  payload: _oKNXMessage.payload,
+                  devicename: _input.name ? _input.name : '',
+                  event: 'Update_NoWrite',
+                  eventdesc: "The value has been updated from another node and hasn't been received from KNX BUS"
+                }
+                // Check RBE INPUT from KNX Bus, to avoid send the payload to the flow, if it's equal to the current payload
+                if (!checkRBEInputFromKNXBusAllowSend(_input, msg.payload)) {
+                  _input.setNodeStatus({
+                    fill: 'grey',
+                    shape: 'ring',
+                    text: 'rbe block (' + msg.payload + ') from KNX',
+                    payload: '',
+                    GA: '',
+                    dpt: '',
+                    devicename: ''
+                  })
+                  return
+                }
+                msg.previouspayload = typeof _input.currentPayload !== 'undefined' ? _input.currentPayload : '' // 24/01/2020 Added previous payload
+                _input.currentPayload = msg.payload // Set the current value for the RBE input
+                _input.setNodeStatus({
+                  fill: 'green',
+                  shape: 'dot',
+                  text: '',
+                  payload: msg.payload,
+                  GA: _input.topic,
+                  dpt: _input.dpt,
+                  devicename: ''
+                })
+                _input.handleSend(msg)
+              }
+            }
+          })
+        } catch (error) { }
+      } else {
+        // Write
+        try {
+          node.knxConnection.write(_oKNXMessage.grpaddr, _oKNXMessage.payload, _oKNXMessage.dpt)
+        } catch (error) {
+          try {
+            const oNode = RED.nodes.getNode(_oKNXMessage.nodecallerid) // 05/04/2022 Get the real node
+            node.sysLogger?.error(
+              'node.knxConnection.write: Payload: ' + _oKNXMessage.payload + ' GA:' + _oKNXMessage.grpaddr + ' DPT:' + _oKNXMessage.dpt + ' ' + error.stack
+            )
+            oNode.setNodeStatus({
+              fill: 'red',
+              shape: 'dot',
+              text: 'Send write ' + error,
+              payload: _oKNXMessage.payload,
+              GA: _oKNXMessage.grpaddr,
+              dpt: _oKNXMessage.dpt,
+              devicename: ''
+            })
+          } catch (error) { }
+        }
+      }
+    }
+
+    // 14/08/2019 If the node has payload same as the received telegram, return false
+    function checkRBEInputFromKNXBusAllowSend (_node, _KNXTelegramPayload) {
+      if (_node.inputRBE !== 'true') return true
+
+      return !_.isEqual(_node.currentPayload, _KNXTelegramPayload)
+    }
+
+    // 26/10/2019 Try to figure out the datapoint type from raw value
+    function tryToFigureOutDataPointFromRawValue (_rawValue) {
+      // 25/10/2019 Try some Datapoints
+      if (_rawValue === null) return '1.001'
+      if (_rawValue.length === 1) {
+        if (_rawValue[0].toString() == '0' || _rawValue[0].toString() == '1') {
+          return '1.001' // True/False?
+        } else {
+          return '5.001' // Absolute Brightness ?
+        }
+      } else if (_rawValue.length == 4) {
+        return '14.056' // Watt ?
+      } else if (_rawValue.length == 2) {
+        return '9.001'
+      } else if (_rawValue.length == 3) {
+        return '11.001'
+      } else if (_rawValue.length == 14) {
+        return '16.001' // Text ?
+      } else {
+        // Dont' know, try until no errors
+        const dpts = Object.entries(dptlib).filter(onlyDptKeys).map(extractBaseNo).sort(sortBy('base')).reduce(toConcattedSubtypes, [])
+        for (let index = 0; index < dpts.length; index++) {
+          const element = dpts[index]
+          try {
+            // dpt.value)
+            // dpt.text))
+            const dpt = dptlib.resolve(element.value)
+            if (typeof dpt !== 'undefined') {
+              const jsValue = dptlib.fromBuffer(_rawValue, dpt)
+              if (typeof jsValue !== 'undefined') {
+                // node.sysLogger?.info("Trying for " + dest + ". FOUND " + element.value);
+                return element.value
+              }
+            }
+          } catch (error) { }
+        }
+        throw new Error('tryToFigureOutDataPointFromRawValue: no suitable datapoint found') // 24/08/2021 Return error if no DPT
+      }
+    }
+
+    function buildInputMessage ({ _srcGA, _destGA, _event, _Rawvalue, _inputDpt, _devicename, _outputtopic, _oNode, _echoed = false, _repeated = false }) {
+      let sPayloadmeasureunit = 'unknown'
+      let sDptdesc = 'unknown'
+      let sPayloadsubtypevalue = 'unknown'
+      let jsValue = null
+      let sInputDpt = 'unknown'
+      let gainfo = 'unknown'
+      let oGA
+
+      // Construct the gainfo from _devicename ("(Ingressi logici->Sensori) Camera armadi lux")
+      if (node.csv !== undefined) {
+        try {
+          oGA = node.csv.filter((sga) => sga.ga == _destGA)[0]
+          const regexGA = /^(.*)\/(.*)\/(.*)$/
+          const regexName = /^\((.*)->(.*)\) (.*)$/
+          const matchGA = oGA.ga.match(regexGA)
+          const matchName = oGA.devicename.match(regexName)
+          gainfo = {
+            maingroupname: matchName[1],
+            middlegroupname: matchName[2],
+            ganame: matchName[3],
+            maingroupnumber: matchGA[1],
+            middlegroupnumber: matchGA[2],
+            ganumber: matchGA[3]
+          }
+        } catch (error) {
+          // Dont' care
+        }
+      }
+
+      // 20/06/2024 set both if undefined
+      if (_inputDpt === undefined) {
+        try {
+          _inputDpt = oGA === undefined ? null : oGA.dpt
+        } catch (error) {
+          _inputDpt = null
+        }
+      }
+      if (_devicename === undefined) {
+        try {
+          _devicename = oGA === undefined ? _oNode.name || '' : oGA.devicename
+        } catch (error) {
+          _devicename = undefined
+        }
+      }
+
+      const isRawMode = typeof _inputDpt === 'string' && _inputDpt.trim().toLowerCase() === 'raw'
+      const isUniversalNode = _oNode?.listenallga === true || _oNode?.listenallga === 'true'
+      const hasKnownInputDpt = !(_inputDpt === null || _inputDpt === undefined || _inputDpt === '')
+      const shouldFallbackToRaw = isUniversalNode && !hasKnownInputDpt
+      const setRawModeMetadata = () => {
+        sInputDpt = 'raw'
+        sPayloadmeasureunit = ''
+        sDptdesc = 'Raw value'
+        sPayloadsubtypevalue = ''
+      }
+
+      const errorMessage = {
+        topic: _outputtopic,
+        payload: 'UNKNOWN, PLEASE IMPORT THE ETS FILE!',
+        devicename: typeof _devicename !== 'undefined' ? _devicename : '',
+        payloadmeasureunit: '',
+        payloadsubtypevalue: '',
+        repeated: _repeated === true,
+        repeat: _repeated === true,
+        knx: {
+          event: _event,
+          dpt: 'unknown',
+          dptdesc: '',
+          source: _srcGA,
+          destination: _destGA,
+          rawValue: _Rawvalue,
+          repeated: _repeated === true,
+          repeat: _repeated === true
+        }
+      }
+
+      // Resolve DPT and convert value if available
+      if (_Rawvalue !== null) {
+        if (isRawMode) {
+          setRawModeMetadata()
+        } else {
+          try {
+            sInputDpt = !hasKnownInputDpt ? tryToFigureOutDataPointFromRawValue(_Rawvalue) : _inputDpt
+          } catch (error) {
+            if (shouldFallbackToRaw) {
+              setRawModeMetadata()
+              jsValue = null
+              node.sysLogger?.debug(`buildInputMessage: falling back to RAW for universal node ${_oNode?.id || ''} destination ${_destGA}`)
+              try {
+                const finalMessage = {
+                  topic: _outputtopic,
+                  devicename: typeof _devicename !== 'undefined' ? _devicename : '',
+                  payload: jsValue,
+                  payloadmeasureunit: sPayloadmeasureunit,
+                  payloadsubtypevalue: sPayloadsubtypevalue,
+                  gainfo,
+                  echoed: _echoed,
+                  repeated: _repeated === true,
+                  repeat: _repeated === true,
+                  knx: {
+                    event: _event,
+                    dpt: sInputDpt,
+                    dptdesc: sDptdesc,
+                    source: _srcGA,
+                    destination: _destGA,
+                    rawValue: _Rawvalue,
+                    repeated: _repeated === true,
+                    repeat: _repeated === true
+                  }
+                }
+                return finalMessage
+              } catch (buildError) {
+                node.sysLogger?.error('buildInputMessage error: ' + buildError.message)
+                return errorMessage
+              }
+            }
+            // Here comes if no datapoint has beeen found
+            node.sysLogger?.error(
+              'buildInputMessage: Error returning from tryToFigureOutDataPointFromRawValue. Device ' +
+              _srcGA +
+              ' Destination ' +
+              _destGA +
+              ' Event ' +
+              _event +
+              " GA's Datapoint " +
+              (_inputDpt === null
+                ? "THE ETS FILE HAS NOT BEEN IMPORTED, SO I'M TRYING TO FIGURE OUT WHAT DATAPOINT BELONGS THIS GROUP ADDRESS. DON'T BLAME ME IF I'M WRONG, INSTEAD, IMPORT THE ETS FILE!"
+                : _inputDpt) +
+              ' Devicename ' +
+              _devicename +
+              ' Topic ' +
+              _outputtopic +
+              ' ' +
+              error.message
+            )
+            errorMessage.payload = 'UNKNOWN: ERROR tryToFigureOutDataPointFromRawValue:' + error.message
+            return errorMessage
+          }
+
+          try {
+            var dpt = dptlib.resolve(sInputDpt)
+          } catch (error) {
+            node.sysLogger?.error(
+              'buildInputMessage: Error returning from dptlib.resolve(sInputDpt). Device ' +
+              _srcGA +
+              ' Destination ' +
+              _destGA +
+              ' Event ' +
+              _event +
+              " GA's Datapoint " +
+              (_inputDpt === null
+                ? "THE ETS FILE HAS NOT BEEN IMPORTED, SO I'M TRYING TO FIGURE OUT WHAT DATAPOINT BELONGS THIS GROUP ADDRESS. DON'T BLAME ME IF I'M WRONG, INSTEAD, IMPORT THE ETS FILE!"
+                : _inputDpt) +
+              ' Devicename ' +
+              _devicename +
+              ' Topic ' +
+              _outputtopic +
+              ' ' +
+              error.message
+            )
+            errorMessage.payload = 'UNKNOWN: ERROR dptlib.resolve:' + error.messages
+            return errorMessage
+          }
+
+          if (dpt !== null && _Rawvalue !== null) {
+            try {
+              jsValue = dptlib.fromBuffer(_Rawvalue, dpt)
+              if (jsValue === null) {
+                node.sysLogger?.warn(
+                  'buildInputMessage: received a wrong datagram form KNX BUS, from device ' +
+                  _srcGA +
+                  ' Destination ' +
+                  _destGA +
+                  ' Event ' +
+                  _event +
+                  " GA's Datapoint " +
+                  (_inputDpt === null
+                    ? "THE ETS FILE HAS NOT BEEN IMPORTED, SO I'M TRYING TO FIGURE OUT WHAT DATAPOINT BELONGS THIS GROUP ADDRESS. DON'T BLAME ME IF I'M WRONG, INSTEAD, IMPORT THE ETS FILE!"
+                    : _inputDpt) +
+                  ' Devicename ' +
+                  _devicename +
+                  ' Topic ' +
+                  _outputtopic +
+                  ' NodeID ' +
+                  _oNode.id || ''
+                )
+              }
+            } catch (error) {
+              node.sysLogger?.error(
+                'buildInputMessage: Error returning from DPT decoding. Device ' +
+                _srcGA +
+                ' Destination ' +
+                _destGA +
+                ' Event ' +
+                _event +
+                " GA's Datapoint " +
+                (_inputDpt === null
+                  ? "THE ETS FILE HAS NOT BEEN IMPORTED, SO I'M TRYING TO FIGURE OUT WHAT DATAPOINT BELONGS THIS GROUP ADDRESS. DON'T BLAME ME IF I'M WRONG, INSTEAD, IMPORT THE ETS FILE!"
+                  : _inputDpt) +
+                ' Devicename ' +
+                _devicename +
+                ' Topic ' +
+                _outputtopic +
+                ' ' +
+                error.message +
+                ' NodeID ' +
+                _oNode.id || ''
+              )
+              errorMessage.payload = 'UNKNOWN: ERROR dptlib.fromBuffer:' + error.stack
+              return errorMessage
+            }
+          }
+
+          // 19/01/2023 FORMATTING THE OUTPUT PAYLOAD (ROUND, ETC) BASED ON THE NODE CONFIG
+          //* ********************************************************
+          jsValue = payloadRounder.Manipulate(_oNode, jsValue)
+          //* ********************************************************
+
+          if (dpt.subtype !== undefined) {
+            sPayloadmeasureunit = dpt.subtype.unit !== undefined ? dpt.subtype.unit : 'unknown'
+            sDptdesc = dpt.subtype.desc !== undefined ? dpt.subtype.desc.charAt(0).toUpperCase() + dpt.subtype.desc.slice(1) : 'unknown'
+            if (dpt.subtype.enc !== undefined) {
+              try {
+                if (!jsValue) sPayloadsubtypevalue = dpt.subtype.enc[0]
+                if (jsValue) sPayloadsubtypevalue = dpt.subtype.enc[1]
+              } catch (error) {
+                // Don't care
+              }
+            }
+          }
+        }
+      } else {
+        // Don't care, it's a READ REQUEST
+        if (isRawMode || shouldFallbackToRaw) {
+          setRawModeMetadata()
+        }
+      }
+
+      try {
+        // Build final input message object
+        const finalMessage = {
+          topic: _outputtopic,
+          devicename: typeof _devicename !== 'undefined' ? _devicename : '',
+          payload: jsValue,
+          payloadmeasureunit: sPayloadmeasureunit,
+          payloadsubtypevalue: sPayloadsubtypevalue,
+          gainfo,
+          echoed: _echoed,
+          repeated: _repeated === true,
+          repeat: _repeated === true,
+          knx: {
+            event: _event,
+            dpt: sInputDpt,
+            dptdesc: sDptdesc,
+            source: _srcGA,
+            destination: _destGA,
+            rawValue: _Rawvalue,
+            repeated: _repeated === true,
+            repeat: _repeated === true
+          }
+        }
+        // 11/11/2021 jsValue is null, as well as _Rawvalue, in case of READ REQUEST message.
+        // if (jsValue !== null) finalMessage.payload = jsValue;
+
+        return finalMessage
+      } catch (error) {
+        node.sysLogger?.error('buildInputMessage error: ' + error.message)
+        return errorMessage
+      }
+    }
+
+    function readCSV (_csvText) {
+      // 26/05/2023 check if the text is a file path
+      if (_csvText.toUpperCase().includes('.CSV') || _csvText.toUpperCase().includes('.ESF')) {
+        // I'ts a file. Read it now and pass to the _csvText
+        const sFileName = _csvText
+        try {
+          _csvText = fs.readFileSync(sFileName, { encoding: 'utf8' })
+        } catch (error) {
+          node.sysLogger?.error('ERROR: reading ETS file ' + error.message)
+          node.error('ERROR: reading ETS file ' + error.message)
+          return
+        }
+      }
+
+      // 24/02/2020, in the middle of Coronavirus emergency in Italy. Check if it a CSV ETS Export of group addresses, or if it's an EFS
+      if (_csvText.split('\n')[0].toUpperCase().indexOf('"') == -1) return readESF(_csvText)
+
+      const ajsonOutput = new Array() // Array: qui va l'output totale con i nodi per node-red
+
+      if (_csvText == '') {
+        node.sysLogger?.info('no csv ETS found')
+      } else {
+        node.sysLogger?.info('csv ETS found !')
+        // 23/08/2019 Delete inwanted CRLF in the GA description
+        const sTemp = correctCRLFInCSV(_csvText)
+
+        // Read and decode the CSV in an Array containing:  "group address", "DPT", "Device Name"
+        const fileGA = sTemp.split('\n')
+        // Controllo se le righe dei gruppi contengono il separatore di tabulazione
+        if (fileGA[0].search('\t') == -1) {
+          node.error('KNXSlim-config: ERROR: the csv ETS file must have the tabulation as separator')
+          return
+        }
+
+        let sFirstGroupName = ''
+        let sSecondGroupName = ''
+        let sFather = ''
+        for (let index = 0; index < fileGA.length; index++) {
+          try {
+            let element = fileGA[index]
+            element = element.replace(/\"/g, '') // Rimuovo le virgolette
+            element = element.replace(/\#/g, '') // Rimuovo evetuali #
+
+            if (element !== '') {
+              // Main and secondary group names
+              if ((element.split('\t')[1].match(/-/g) || []).length == 2) {
+                // Found main group family name (Example Light Actuators)
+                sFirstGroupName = element.split('\t')[0] || ''
+                sSecondGroupName = ''
+              }
+              if ((element.split('\t')[1].match(/-/g) || []).length == 1) {
+                // Found second group family name (Example First Floor light)
+                sSecondGroupName = element.split('\t')[0] || ''
+              }
+              if (sFirstGroupName !== '' && sSecondGroupName !== '') {
+                sFather = '(' + sFirstGroupName + '->' + sSecondGroupName + ') '
+              }
+
+              if (element.split('\t')[1].search('-') == -1 && element.split('\t')[1].search('/') !== -1) {
+                // Ho trovato una riga contenente un GA valido, cioè con 2 "/"
+                if (element.split('\t')[5] == '') {
+                  if (node.stopETSImportIfNoDatapoint === 'stop') {
+                    node.error(
+                      'KNXSlim-config: ABORT IMPORT OF ETS CSV FILE. To skip the invalid datapoint and continue import, change the related setting, located in the config node in the ETS import section.'
+                    )
+                    return
+                  }
+                  if (node.stopETSImportIfNoDatapoint === 'fake') {
+                    // 02/03/2020 Whould you like to continue without datapoint? Good. Here a totally fake datapoint
+                    node.warn(
+                      'KNXSlim-config: WARNING IMPORT OF ETS CSV FILE. Datapoint not set. You choosed to continue import with a fake datapoint 1.001. -> ' +
+                      element.split('\t')[0] +
+                      ' ' +
+                      element.split('\t')[1]
+                    )
+                    ajsonOutput.push({
+                      ga: element.split('\t')[1],
+                      dpt: '1.001',
+                      devicename: sFather + element.split('\t')[0] + ' (DPT NOT SET IN ETS - FAKE DPT USED)'
+                    })
+                  } else {
+                    // 31/03/2020 Skip import
+                    node.warn(
+                      'KNXSlim-config: WARNING IMPORT OF ETS CSV FILE. Datapoint not set. You choosed to skip -> ' +
+                      element.split('\t')[0] +
+                      ' ' +
+                      element.split('\t')[1]
+                    )
+                  }
+                } else {
+                  const DPTa = element.split('\t')[5].split('-')[1]
+                  let DPTb = element.split('\t')[5].split('-')[2]
+                  if (typeof DPTb === 'undefined') {
+                    node.warn(
+                      "KNXSlim-config: WARNING: Datapoint not fully set (there is only the main type). I applied a default .001, but please check if i'ts ok ->" +
+                      element.split('\t')[0] +
+                      ' ' +
+                      element.split('\t')[1] +
+                      ' Datapoint: ' +
+                      element.split('\t')[5]
+                    )
+                    DPTb = '001' // default
+                  }
+                  // Trailing zeroes
+                  if (DPTb.length == 1) {
+                    DPTb = '00' + DPTb
+                  } else if (DPTb.length == 2) {
+                    DPTb = '0' + DPTb
+                  }
+                  if (DPTb.length == 3) {
+                    DPTb = '' + DPTb // stupid, but for readability
+                  }
+                  ajsonOutput.push({
+                    ga: element.split('\t')[1],
+                    dpt: DPTa + '.' + DPTb,
+                    devicename: sFather + element.split('\t')[0]
+                  })
+                }
+              }
+            }
+          } catch (error) {
+            node.sysLogger?.error('readCSV ' + ' ROW:' + fileGA[index] + ' Error:' + error.stack)
+          }
+        }
+
+        return ajsonOutput
+      }
+    }
+
+    function readESF (_esfText) {
+      // 24/02/2020 must do an EIS to DPT conversion.
+      // https://www.loxone.com/dede/kb/eibknx-datentypen/
+      // Format: Attuatori luci.Luci primo piano.0/0/1	Luce camera da letto	EIS 1 'Switching' (1 Bit)	Low
+      const ajsonOutput = new Array() // Array: qui va l'output totale con i nodi per node-red
+
+      if (_esfText === '') {
+        node.sysLogger?.info('no ESF found')
+        return
+      } else {
+        node.sysLogger?.info('esf ETS found !')
+        // Read and decode the CSV in an Array containing:  "group address", "DPT", "Device Name"
+        const fileGA = _esfText.split('\n')
+        let sGA = ''
+        let sFirstGroupName = ''
+        let sSecondGroupName = '' // Fake, because EIS datapoints are unprecise.
+        let sDeviceName = ''
+        let sEIS = ''
+        let sDPT = ''
+
+        for (let index = 1; index < fileGA.length; index++) {
+          let element = fileGA[index]
+          element = element.replace(/\"/g, '') // Rimuovo evetuali virgolette
+          element = element.replace(/\#/g, '') // Rimuovo evetuali #
+          // element = element.replace(/[^\x00-\x7F]/g, '') // Remove non ascii chars
+
+          if (element !== '') {
+            sFirstGroupName = element.split('\t')[0].split('.')[0] || ''
+            sSecondGroupName = element.split('\t')[0].split('.')[1] || ''
+            sGA = element.split('\t')[0].split('.')[2] || ''
+            sDeviceName = element.split('\t')[1] || ''
+            sEIS = element.split('\t')[2] || ''
+            sDPT = ''
+            // Transform EIS to DPT
+            if (sEIS.toUpperCase().includes('EIS 1')) sDPT = '1.001'
+            if (sEIS.toUpperCase().includes('EIS 2')) sDPT = '3.007'
+            if (sEIS.toUpperCase().includes('EIS 3')) sDPT = '10.001'
+            if (sEIS.toUpperCase().includes('EIS 4')) sDPT = '11.001'
+            if (sEIS.toUpperCase().includes('EIS 5')) sDPT = '9.001'
+            if (sEIS.toUpperCase().includes('EIS 6')) sDPT = '5.001'
+            if (sEIS.toUpperCase().includes('EIS 7')) sDPT = '1.001'
+            if (sEIS.toUpperCase().includes('EIS 8')) sDPT = '2.001'
+            if (sEIS.toUpperCase().includes('EIS 9')) sDPT = '14.007'
+            if (sEIS.toUpperCase().includes('EIS 10')) sDPT = '7.001'
+            if (sEIS.toUpperCase().includes('EIS 11')) sDPT = '12.001'
+            if (sEIS.toUpperCase().includes('EIS 12')) sDPT = '15.000'
+            if (sEIS.toUpperCase().includes('EIS 13')) sDPT = '4.001'
+            if (sEIS.toUpperCase().includes('EIS 14')) sDPT = '5.001'
+            if (sEIS.toUpperCase().includes('EIS 15')) sDPT = '16.001'
+
+            if (sEIS.toUpperCase().includes('UNCERTAIN')) {
+              if (sEIS.toUpperCase().includes('4 BYTE')) {
+                sDPT = '14.056'
+              } else if (sEIS.toUpperCase().includes('2 BYTE')) {
+                sDPT = '9.001'
+              } else if (sEIS.toUpperCase().includes('3 BYTE')) {
+                sDPT = '10.001' // Date
+              } else if (sEIS.toUpperCase().includes('1 BYTE')) {
+                sDPT = '20.102' // RTC
+              } else {
+                sDPT = '5.004' // Maybe.
+              }
+            }
+            if (sDPT === '') {
+              if (node.stopETSImportIfNoDatapoint === 'stop') {
+                node.error(
+                  'KNXSlim-config: ABORT IMPORT OF ETS ESF FILE. To continue import, change the related setting, located in the config node in the ETS import section.'
+                )
+                return
+              } if (node.stopETSImportIfNoDatapoint === 'fake') {
+                sDPT = '5.004' // Maybe.
+                node.error(
+                  'KNXSlim-config: ERROR: Found an UNCERTAIN datapoint in ESF ETS. You choosed to fake the datapoint -> ' +
+                  sGA +
+                  '. An fake datapoint has been set: ' +
+                  sDPT
+                )
+              } else {
+                sDPT = 'SKIP'
+                node.error('KNXSlim-config: ERROR: Found an UNCERTAIN datapoint in ESF ETS. You choosed to skip -> ' + sGA)
+              }
+            }
+            if (sDPT !== 'SKIP') ajsonOutput.push({
+              ga: sGA,
+              dpt: sDPT,
+              devicename: '(' + sFirstGroupName + '->' + sSecondGroupName + ') ' + sDeviceName
+            })
+          }
+        }
+      }
+
+      return ajsonOutput
+    }
+
+    // 23/08/2019 Delete unwanted CRLF in the GA description
+    function correctCRLFInCSV (_csv) {
+      let sOut = '' // fixed output text to return
+      let sChar = ''
+      let bStart = false
+      for (let index = 0; index < _csv.length; index++) {
+        sChar = _csv.substr(index, 1)
+        if (sChar == '"') {
+          if (!bStart) {
+            bStart = true
+          } else {
+            bStart = false
+          }
+          sOut += sChar
+        } else {
+          if (bStart) {
+            // i'm in the phrase, delimited by "". No CRLF nor TABulators should be there
+            if (sChar !== '\n' && sChar !== '\r' && sChar !== '\t') {
+              sOut += sChar
+            } else {
+              sOut += ' ' // Where it was a CRLF, i put a space
+            }
+          } else {
+            sOut += sChar
+          }
+        }
+      }
+
+      // Replace all parenthesis with []
+      sOut = sOut.replace(/\(/g, '[').replace(/\)/g, ']')
+      return sOut
+    }
+
+    // 08/10/2021 Every xx seconds, i check if the connection is up and running
+    node.sysLogger?.info('Autoconnection: ' + (node.autoReconnect === false ? 'no.' : 'yes') + ' Node ' + node.name)
+    if (node.timerKNXSlimCheckState !== null) clearInterval(node.timerKNXSlimCheckState)
+    node.timerKNXSlimCheckState = setInterval(async () => {
+      // If the node is disconnected, wait another cycle, then reconnects
+      if (node.allowLauch_initKNXConnection && node.autoReconnect) {
+        node.allowLauch_initKNXConnection = false
+        const t = setTimeout(() => {
+          // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "const t = ".
+          node.setAllClientsStatus('Auto reconnect in progress...', 'grey', '')
+        }, 100)
+        node.sysLogger?.debug(
+          'Auto Reconect by timerKNXSlimCheckState in progress. node.LinkStatus: ' +
+          node.linkStatus +
+          ', node.autoReconnect:' +
+          node.autoReconnect
+        )
+        await node.initKNXConnection()
+        return
+      }
+      if (node.linkStatus === 'disconnected' && node.autoReconnect) {
+        node.allowLauch_initKNXConnection = true // Next cycle, launch initKNXConnection, so it pauses more and leave more time
+        const t = setTimeout(() => {
+          // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+          node.setAllClientsStatus('Retry connection', 'grey', '')
+        }, 1000)
+        node.sysLogger?.debug(
+          'Waiting next cycle to reconect. node.LinkStatus: ' + node.linkStatus + ', node.autoReconnect:' + node.autoReconnect
+        )
+        // node.initKNXConnection();
+      }
+    }, 10000)
+
+    node.Disconnect = async (_sNodeStatus = '', _sColor = 'grey') => {
+      if (node.timerSaveExposedGAs !== null) {
+        clearInterval(node.timerSaveExposedGAs)
+        node.timerSaveExposedGAs = null
+      }
+      if (node.timerDoInitialRead !== null) {
+        clearTimeout(node.timerDoInitialRead) // 17/02/2020 Stop the initial read timer
+        node.timerDoInitialRead = null
+      }
+
+      const previousStatus = node.linkStatus
+      node.linkStatus = 'disconnected' // 29/08/2019 signal disconnection
+
+      const connection = node.knxConnection
+      const serialDriver = (node.knxConnection && node.knxConnection._serialDriver) || node.serialDriverRef
+      const isSerial = node.hostProtocol === 'SerialFT12'
+      if (connection) {
+        try {
+          await connection.Disconnect()
+        } catch (error) {
+          node.sysLogger?.debug(
+            'Disconnected: node.knxConnection.Disconnect() ' + (error.message || '') + ' , node.autoReconnect:' + node.autoReconnect
+          )
+          // Extra guard for FT1.2: if Disconnect failed, try closing the serial driver directly
+          if (isSerial && connection._serialDriver && typeof connection._serialDriver.close === 'function') {
+            try {
+              await connection._serialDriver.close()
+              node.sysLogger?.debug('Disconnect: fallback close on serial driver executed')
+            } catch (closeErr) {
+              node.sysLogger?.debug('Disconnect: fallback close on serial driver failed: ' + (closeErr.message || ''))
+            }
+          }
+        } finally {
+          try {
+            connection.removeAllListeners()
+            // Never leave a (possibly still async-active) client without an 'error'
+            // listener: a late rejection would crash the whole process.
+            connection.on(knx.KNXClientEvents.error, () => { })
+          } catch (error) { /* empty */ }
+          if (isSerial && serialDriver && typeof serialDriver.close === 'function') {
+            try {
+              await serialDriver.close()
+              node.sysLogger?.debug('Disconnect: ensured serial driver close')
+            } catch (closeErr) {
+              node.sysLogger?.debug('Disconnect: ensure serial driver close failed: ' + (closeErr.message || ''))
+            }
+          }
+          node.knxConnection = null
+          node.serialDriverRef = null
+        }
+      } else {
+        if (isSerial && serialDriver && typeof serialDriver.close === 'function') {
+          try {
+            await serialDriver.close()
+            node.sysLogger?.debug('Disconnect: closed cached serial driver without knxConnection')
+          } catch (closeErr) {
+            node.sysLogger?.debug('Disconnect: cached serial driver close failed: ' + (closeErr.message || ''))
+          } finally {
+            node.serialDriverRef = null
+          }
+        }
+        node.sysLogger?.debug('Disconnect: no knxConnection instance. previous status: ' + previousStatus)
+      }
+
+      node.setAllClientsStatus('Disconnected', _sColor, _sNodeStatus)
+      await saveExposedGAs() // 04/04/2021 save the current values of GA payload
+      node.sysLogger?.debug('Disconnected, node.autoReconnect:' + node.autoReconnect)
+    }
+
+    node.on('close', async function (done) {
+      try {
+        if (node.timerKNXSlimCheckState !== null) {
+          clearInterval(node.timerKNXSlimCheckState)
+          node.timerKNXSlimCheckState = null
+        }
+        await node.Disconnect()
+      } catch (error) { /* empty */ }
+      node.nodeClients = [] // 05/04/2022 Nullify
+      try {
+        node.sysLogger?.destroy()
+        node.sysLogger = null
+      } catch (error) { /* empty */ }
+      done()
+    })
+  }
+
+  // RED.nodes.registerType("knxSlim-config", knxSlimConfigNode);
+  RED.nodes.registerType('knxSlim-config', knxSlimConfigNode, {
+    credentials: {
+      keyringFilePassword: { type: 'password' }
+    }
+  })
+}
+
+module.exports.__test = {
+  resolveHostAddress
+}

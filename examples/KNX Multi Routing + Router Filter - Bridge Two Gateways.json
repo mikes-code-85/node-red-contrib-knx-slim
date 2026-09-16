@@ -10,7 +10,7 @@
     "id": "cmt_knx_mr_1",
     "type": "comment",
     "z": "tab_knx_mr_sample",
-    "name": "Bridge two KNX Ultimate gateways (A ↔ B) using RAW telegram objects + Router Filter.",
+    "name": "Bridge two KNX Slim gateways (A ↔ B) using RAW telegram objects + Router Filter.",
     "info": "",
     "x": 390,
     "y": 40,
@@ -18,7 +18,7 @@
   },
   {
     "id": "mr_gateway_a",
-    "type": "knxUltimateMultiRouting",
+    "type": "knxSlimMultiRouting",
     "z": "tab_knx_mr_sample",
     "server": "cfg_knx_mr_a",
     "name": "Gateway A (out/in)",
@@ -34,7 +34,7 @@
   },
   {
     "id": "mr_gateway_b",
-    "type": "knxUltimateMultiRouting",
+    "type": "knxSlimMultiRouting",
     "z": "tab_knx_mr_sample",
     "server": "cfg_knx_mr_b",
     "name": "Gateway B (out/in)",
@@ -50,7 +50,7 @@
   },
   {
     "id": "rf_a_to_b",
-    "type": "knxUltimateRouterFilter",
+    "type": "knxSlimRouterFilter",
     "z": "tab_knx_mr_sample",
     "name": "A → B filter",
     "allowWrite": true,
@@ -77,7 +77,7 @@
   },
   {
     "id": "rf_b_to_a",
-    "type": "knxUltimateRouterFilter",
+    "type": "knxSlimRouterFilter",
     "z": "tab_knx_mr_sample",
     "name": "B → A filter",
     "allowWrite": true,
@@ -164,7 +164,7 @@
   },
   {
     "id": "cfg_knx_mr_a",
-    "type": "knxUltimate-config",
+    "type": "knxSlim-config",
     "z": "",
     "host": "224.0.23.12",
     "port": "3671",
@@ -177,7 +177,7 @@
   },
   {
     "id": "cfg_knx_mr_b",
-    "type": "knxUltimate-config",
+    "type": "knxSlim-config",
     "z": "",
     "host": "224.0.23.12",
     "port": "3671",

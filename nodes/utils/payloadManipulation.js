@@ -77,7 +77,7 @@ module.exports.KNXULtimateChangeConfigByInputMSG = function KNXULtimateChangeCon
     node.setNodeStatus({
       fill: 'red', shape: 'ring', text: 'Unable to retrieve the datapoint from the ETS file', payload: '', GA: '', dpt: '', devicename: ''
     })
-    if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxUltimate: setConfig: Node.id: ${node.id} error: Unable to retrieve the datapoint from the ETS file`)
+    if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxSlim: setConfig: Node.id: ${node.id} error: Unable to retrieve the datapoint from the ETS file`)
   } else {
     node.setNodeStatus({
       fill: 'blue', shape: 'ring', text: `Config changed. Current GA: ${node.topic} DPT: ${node.dpt}`, payload: '', GA: '', dpt: '', devicename: node.name

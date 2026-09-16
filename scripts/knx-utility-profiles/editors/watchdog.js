@@ -12,17 +12,17 @@ const utilityNumber = (minimum, integer = false, enabled = () => true) => functi
     Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
 };
 
-RED.nodes.registerType('knxUltimateWatchDog', {
-        category: "KNX Ultimate",
+RED.nodes.registerType('knxSlimWatchDog', {
+        category: "KNX Slim",
         color: '#C7E9C0',
         defaults: {
-            server: { type: "knxUltimate-config", required: true },
+            server: { type: "knxSlim-config", required: true },
             topic: { value: "12/0/0" },
             maxRetry: { value: 6, validate: utilityNumber(0, true) }, // Zero reports failure on the first unsuccessful check.
             retryInterval: { value: 10, validate: utilityNumber(0.001) },
             name: { value: "" },
             autoStart: { value: true },
-            listenToKnxUltimateNodeErrors: { value: true },
+            listenToKnxSlimNodeErrors: { value: true },
             checkLevel: { value: "Ethernet" }
         },
         inputs: 1,
@@ -78,7 +78,7 @@ RED.nodes.registerType('knxUltimateWatchDog', {
                 if (!serverId) return Promise.resolve([]);
                 if (KNX_GA_CACHE.has(serverId)) return Promise.resolve(KNX_GA_CACHE.get(serverId));
                 return new Promise((resolve) => {
-                    profileGetJSON(`knxUltimatecsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
+                    profileGetJSON(`knxSlimcsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
                         const list = Array.isArray(data) ? data : [];
                         KNX_GA_CACHE.set(serverId, list);
                         resolve(list);
@@ -134,7 +134,7 @@ RED.nodes.registerType('knxUltimateWatchDog', {
                                 $nameInput.val(deviceName);
                             }
                         }
-                    }).on('focus.knxUltimateWatchDog click.knxUltimateWatchDog', function () {
+                    }).on('focus.knxSlimWatchDog click.knxSlimWatchDog', function () {
                         const currentValue = $(this).val() || '';
                         try {
                             $(this).autocomplete('search', currentValue ? `${currentValue} exactmatch` : '');

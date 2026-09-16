@@ -51,22 +51,22 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
     return 0
   }
 
-  const knxGetKnxUltimateConfigs = () => {
+  const knxGetKnxSlimConfigs = () => {
     const configs = []
     try {
       if (RED && RED.nodes) {
         if (typeof RED.nodes.eachConfig === 'function') {
           RED.nodes.eachConfig((cfg) => {
-            if (cfg && cfg.type === 'knxUltimate-config') configs.push(cfg)
+            if (cfg && cfg.type === 'knxSlim-config') configs.push(cfg)
           })
         } else if (typeof RED.nodes.eachNode === 'function') {
           RED.nodes.eachNode((n) => {
-            if (n && n.type === 'knxUltimate-config') configs.push(n)
+            if (n && n.type === 'knxSlim-config') configs.push(n)
           })
         }
         if (configs.length === 0 && typeof RED.nodes.filterNodes === 'function') {
           try {
-            const filtered = RED.nodes.filterNodes({ type: 'knxUltimate-config' })
+            const filtered = RED.nodes.filterNodes({ type: 'knxSlim-config' })
             if (Array.isArray(filtered)) filtered.forEach((n) => configs.push(n))
           } catch (error) { /* ignore */ }
         }
@@ -78,7 +78,7 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
   const knxFetchGroupAddresses = (serverId) => {
     return new Promise((resolve) => {
       if (!serverId) return resolve([])
-      $.getJSON(`knxUltimatecsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
+      $.getJSON(`knxSlimcsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
         resolve(Array.isArray(data) ? data : [])
       }).fail(() => resolve([]))
     })
@@ -168,8 +168,8 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
         }
       }
 
-      // Otherwise, select the first knxUltimate-config that has an ETS CSV imported (non-empty parsed GA list).
-      const configs = knxGetKnxUltimateConfigs()
+      // Otherwise, select the first knxSlim-config that has an ETS CSV imported (non-empty parsed GA list).
+      const configs = knxGetKnxSlimConfigs()
       if (configs.length === 0) return
 
       // Fast path: config node already carries an ETS file/path in its `csv` property.
@@ -203,7 +203,7 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
       const suggestions = knxSuggestFromCsv(selected.rows)
       return knxApplySuggestions(node, selected.id, suggestions, { updateDom, canApply })
     } catch (error) {
-      try { console.warn('knxUltimateDateTime auto-config failed', error) } catch (e) { /* ignore */ }
+      try { console.warn('knxSlimDateTime auto-config failed', error) } catch (e) { /* ignore */ }
     }
   }
 
@@ -215,7 +215,7 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
       const suggestions = knxSuggestFromCsv(rows)
       return knxApplySuggestions(node, serverId, suggestions, { updateDom, overwrite, canApply })
     } catch (error) {
-      try { console.warn('knxUltimateDateTime auto-config for server failed', error) } catch (e) { /* ignore */ }
+      try { console.warn('knxSlimDateTime auto-config for server failed', error) } catch (e) { /* ignore */ }
     }
   }
 
@@ -275,11 +275,11 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
     return !enabled || RED.validators.number()(value)
   }
 
-  RED.nodes.registerType('knxUltimateDateTime', {
-    category: 'KNX Ultimate',
+  RED.nodes.registerType('knxSlimDateTime', {
+    category: 'KNX Slim',
     color: '#C7E9C0',
     defaults: {
-      server: { type: 'knxUltimate-config', required: true },
+      server: { type: 'knxSlim-config', required: true },
       name: { value: '' },
       outputtopic: { value: '' },
       gaDateTime: { value: '' },
@@ -305,7 +305,7 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
     },
     paletteLabel: function () {
       try {
-        return RED._('node-red-contrib-knx-ultimate/knxUltimateDateTime:knxUltimateDateTime.paletteLabel') || 'DateTime'
+        return RED._('node-red-contrib-knx-slim/knxSlimDateTime:knxSlimDateTime.paletteLabel') || 'DateTime'
       } catch (error) {
         return 'DateTime'
       }
@@ -333,13 +333,13 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
         const node = this
         $.ajax({
           type: 'POST',
-          url: 'knxUltimateUtility/sendNow',
+          url: 'knxSlimUtility/sendNow',
           data: { id: node.id },
           success: function (response) {
             const queued = response && response.queued === true
             const message = queued
-              ? (RED._('node-red-contrib-knx-ultimate/knxUltimateDateTime:knxUltimateDateTime.notifyQueued') || 'Queued (gateway not connected yet)')
-              : (RED._('node-red-contrib-knx-ultimate/knxUltimateDateTime:knxUltimateDateTime.notifySent') || 'Sent to KNX')
+              ? (RED._('node-red-contrib-knx-slim/knxSlimDateTime:knxSlimDateTime.notifyQueued') || 'Queued (gateway not connected yet)')
+              : (RED._('node-red-contrib-knx-slim/knxSlimDateTime:knxSlimDateTime.notifySent') || 'Sent to KNX')
             RED.notify(message, 'success')
           },
           error: function (xhr) {
@@ -382,7 +382,7 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
         if (!serverId) return Promise.resolve([])
         if (KNX_GA_CACHE.has(serverId)) return Promise.resolve(KNX_GA_CACHE.get(serverId))
         return new Promise((resolve) => {
-          $.getJSON(`knxUltimatecsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
+          $.getJSON(`knxSlimcsv?nodeID=${serverId}&_=${Date.now()}`, (data) => {
             const list = Array.isArray(data) ? data : []
             KNX_GA_CACHE.set(serverId, list)
             resolve(list)
@@ -448,7 +448,7 @@ const KNX_ULTIMATE_DATETIME_KEYWORDS = {
                 }
               }
             })
-            .on('focus.knxUltimateDateTime click.knxUltimateDateTime', function () {
+            .on('focus.knxSlimDateTime click.knxSlimDateTime', function () {
               const currentValue = $(this).val() || ''
               try { $(this).autocomplete('search', `${currentValue} exactmatch`) } catch (error) { /* ignore */ }
             })

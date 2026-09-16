@@ -2,21 +2,21 @@
   const api = factory(root)
   if (typeof module === 'object' && module.exports) module.exports = api
   if (root) {
-    root.KNXUltimateUtilityMigration = api
+    root.KNXSlimUtilityMigration = api
     if (root.RED && root.jQuery && root.document) api.installLegacyButton(root.RED, root.jQuery, root.document)
   }
 }(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict'
 
   const LEGACY_NODE_PROFILES = Object.freeze({
-    knxUltimateAlerter: Object.freeze({ utilityType: 'alerter', inputs: 1, outputs: 3 }),
-    knxUltimateAutoResponder: Object.freeze({ utilityType: 'autoresponder', inputs: 0, outputs: 0 }),
-    knxUltimateDateTime: Object.freeze({ utilityType: 'datetime', inputs: 0, outputs: 0 }),
-    knxUltimateWatchDog: Object.freeze({ utilityType: 'watchdog', inputs: 1, outputs: 1 }),
-    knxUltimateGlobalContext: Object.freeze({ utilityType: 'globalcontext', inputs: 0, outputs: 0 })
+    knxSlimAlerter: Object.freeze({ utilityType: 'alerter', inputs: 1, outputs: 3 }),
+    knxSlimAutoResponder: Object.freeze({ utilityType: 'autoresponder', inputs: 0, outputs: 0 }),
+    knxSlimDateTime: Object.freeze({ utilityType: 'datetime', inputs: 0, outputs: 0 }),
+    knxSlimWatchDog: Object.freeze({ utilityType: 'watchdog', inputs: 1, outputs: 1 }),
+    knxSlimGlobalContext: Object.freeze({ utilityType: 'globalcontext', inputs: 0, outputs: 0 })
   })
-  const I18N_PREFIX = 'node-red-contrib-knx-ultimate/knxUltimateUtility:knxUltimateUtility.'
-  const EVENT_NAMESPACE = '.knxUltimateUtilityMigration'
+  const I18N_PREFIX = 'node-red-contrib-knx-slim/knxSlimUtility:knxSlimUtility.'
+  const EVENT_NAMESPACE = '.knxSlimUtilityMigration'
   let activeNotification
 
   function isLegacyUtilityNode (node) {
@@ -35,7 +35,7 @@
     if (!Array.isArray(legacyNodes)) throw new TypeError('Legacy KNX utility nodes must be an array')
     return legacyNodes.map(function (node, index) {
       if (!isLegacyUtilityNode(node)) throw new TypeError(`Entry ${index} is not a supported legacy KNX utility node`)
-      return { index, type: 'knxUltimateUtility', ...LEGACY_NODE_PROFILES[node.type] }
+      return { index, type: 'knxSlimUtility', ...LEGACY_NODE_PROFILES[node.type] }
     })
   }
 
@@ -84,7 +84,7 @@
     if (!RED || !RED.nodes || typeof RED.nodes.getType !== 'function') throw new Error('The Node-RED editor API is unavailable')
     const patches = createLocalMigrationPatches(legacyNodes)
     if (patches.length === 0) return 0
-    const definition = RED.nodes.getType('knxUltimateUtility')
+    const definition = RED.nodes.getType('knxSlimUtility')
     if (!definition) throw new Error('The KNX Utility node is not registered')
     if (!RED.history || typeof RED.history.push !== 'function') throw new Error('The Node-RED undo history is unavailable')
     const documentObject = options.documentObject || (root && root.document)
@@ -217,7 +217,7 @@
             if (running || closed) return
             running = true
             try {
-              const backupApi = options.backupApi || (environment && environment.KNXUltimateFlowMigrationBackup)
+              const backupApi = options.backupApi || (environment && environment.KNXSlimFlowMigrationBackup)
               if (!backupApi || typeof backupApi.download !== 'function') throw new Error('The flow backup tool is unavailable. Restart Node-RED after updating the package.')
               // Keep the snapshot and download inside the user's click, before
               // cancelling the editor or changing any of the legacy nodes.

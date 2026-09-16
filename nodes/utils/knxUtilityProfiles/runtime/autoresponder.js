@@ -33,7 +33,7 @@ module.exports = function (RED) {
   //     payload
   // }
 
-  function knxUltimateAutoResponder (config) {
+  function knxSlimAutoResponder (config) {
     RED.nodes.createNode(this, config)
     const node = this
     node.serverKNX = RED.nodes.getNode(config.server)
@@ -91,9 +91,9 @@ module.exports = function (RED) {
       try {
         // An empty configured list must also replace its previous saved values.
         fs.writeFileSync(sFile, JSON.stringify(node.exposedGAs))
-        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.info('knxUltimateAutoResponder: wrote peristent values to the file ' + sFile)
+        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.info('knxSlimAutoResponder: wrote peristent values to the file ' + sFile)
       } catch (err) {
-        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error('knxUltimateAutoResponder: unable to write peristent values to the file ' + sFile + ' ' + err.message)
+        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error('knxSlimAutoResponder: unable to write peristent values to the file ' + sFile + ' ' + err.message)
       }
     }
 
@@ -103,7 +103,7 @@ module.exports = function (RED) {
         node.exposedGAs = JSON.parse(fs.readFileSync(sFile, 'utf8'))
       } catch (err) {
         node.exposedGAs = []
-        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.warn('knxUltimateAutoResponder: unable to read peristent file ' + sFile + ' ' + err.message)
+        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.warn('knxSlimAutoResponder: unable to read peristent file ' + sFile + ' ' + err.message)
       }
     }
 
@@ -138,7 +138,7 @@ module.exports = function (RED) {
       node.commandText = JSON.parse(config.commandText)
     } catch (error) {
       updateStatus({ fill: 'red', shape: 'dot', text: 'JSON error: ' + error.message, payload: '', dpt: '', devicename: '' })
-      if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxUltimateAutoResponder: node.commandText = JSON.parse(config.commandText) ${error.stack}`)
+      if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxSlimAutoResponder: node.commandText = JSON.parse(config.commandText) ${error.stack}`)
       return
     }
 
@@ -175,7 +175,7 @@ module.exports = function (RED) {
       } else {
         // Error
         updateStatus({ fill: 'red', shape: 'dot', text: 'JSON error: ga or default keys not set. Abort.', payload: '', dpt: '', devicename: '' })
-        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error('knxUltimateAutoResponder: node.commandText.forEach(element.. JSON error: ga or default keys not set. Abort.')
+        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error('knxSlimAutoResponder: node.commandText.forEach(element.. JSON error: ga or default keys not set. Abort.')
       }
     })
 
@@ -184,24 +184,24 @@ module.exports = function (RED) {
     // skipping this step for [] leaves removed addresses able to respond.
     node.exposedGAs = node.exposedGAs.filter(ga => ga.enabled === true)
 
-    // This function is called by the knx-ultimate config node, to output a msg.payload.
+    // This function is called by the knx-slim config node, to output a msg.payload.
     node.handleSend = msg => {
       if (msg.knx !== undefined && msg.knx.event !== undefined && msg.knx.event !== 'GroupValue_Read') {
         // Save the value
         try {
           var oGa = node.exposedGAs.find(ga => ga.address === msg.knx.destination)
         } catch (error) {
-          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxUltimateAutoResponder: var oGa = node.exposedGAs.find(ga => ga.address === msg.knx.destination) ${error.stack}`)
+          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxSlimAutoResponder: var oGa = node.exposedGAs.find(ga => ga.address === msg.knx.destination) ${error.stack}`)
         }
         if (oGa !== undefined) {
           let decodedPayload
           try {
-            // Don't care about the decoded payload, because knxUltimate-config could pass a TryToFindDatapoint from raw data
+            // Don't care about the decoded payload, because knxSlim-config could pass a TryToFindDatapoint from raw data
             // Take only RAW data and decode it with the dpt specified by the commandText directive
             decodedPayload = dptlib.fromBuffer(msg.knx.rawValue, dptlib.resolve(oGa.dpt))
           } catch (error) {
             updateStatus({ fill: 'red', shape: 'dot', text: 'const decodedPayload = dptlib.fromBuffer(msg.knx.rawValue, dptlib.resolve(oGa.dpt)); ' + error.message, payload: '', dpt: '', devicename: '' })
-            if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxUltimateAutoResponder: const decodedPayload = dptlib.fromBuffer(msg.knx.rawValue, dptlib.resolve(oGa.dpt)); ${error.stack}`)
+            if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxSlimAutoResponder: const decodedPayload = dptlib.fromBuffer(msg.knx.rawValue, dptlib.resolve(oGa.dpt)); ${error.stack}`)
           }
           oGa.payload = decodedPayload
         }
@@ -228,7 +228,7 @@ module.exports = function (RED) {
             }
           }
         } catch (error) {
-          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxUltimateAutoResponder: after bFound ${error.stack}`)
+          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`knxSlimAutoResponder: after bFound ${error.stack}`)
         }
       }
     }
@@ -262,5 +262,5 @@ module.exports = function (RED) {
       await node.saveExposedGAs()
     }, 5000)
   }
-  RED.nodes.registerType('knxUltimateAutoResponder', knxUltimateAutoResponder)
+  RED.nodes.registerType('knxSlimAutoResponder', knxSlimAutoResponder)
 }

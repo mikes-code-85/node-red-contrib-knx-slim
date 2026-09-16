@@ -12,11 +12,11 @@ const utilityNumber = (minimum, integer = false, enabled = () => true) => functi
     Number.isFinite(numeric) && numeric >= minimum && (!integer || Number.isInteger(numeric));
 };
 
-RED.nodes.registerType('knxUltimateGlobalContext', {
-        category: "KNX Ultimate",
+RED.nodes.registerType('knxSlimGlobalContext', {
+        category: "KNX Slim",
         color: '#C7E9C0',
         defaults: {
-            server: { type: "knxUltimate-config", required: true },
+            server: { type: "knxSlim-config", required: true },
             name: { value: "KNXGlobalContext", validate: function (value) { return /^[a-zA-Z]+$/.test(value || ''); } },
             exposeAsVariable: { value: "exposeAsVariableREADWRITE", required: false },
             writeExecutionInterval: { value: 1000, validate: utilityNumber(1) },

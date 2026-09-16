@@ -1,0 +1,1066 @@
+const loggerClass = require('./utils/sysLogger')
+
+const coerceBoolean = (value) => (value === true || value === 'true')
+
+let buttonEndpointRegistered = false
+let liveStateEndpointRegistered = false
+const knxSlimLiveState = new Map()
+
+const resolveBubbleColor = (status = {}) => {
+  const fill = typeof status.fill === 'string' ? status.fill.trim().toLowerCase() : ''
+  if (typeof status.payload === 'boolean') return status.payload ? '#ffd84d' : '#a5afbf'
+  if (typeof status.payload === 'number' && Number.isFinite(status.payload)) {
+    if (status.payload > 0) return '#ffd84d'
+    if (status.payload === 0) return '#a5afbf'
+  }
+  switch (fill) {
+    case 'green':
+      return '#58c96a'
+    case 'yellow':
+      return '#ffd84d'
+    case 'blue':
+      return '#61a8ff'
+    case 'red':
+      return '#f06b6b'
+    case 'grey':
+    case 'gray':
+      return '#a5afbf'
+    default:
+      return '#d4d8e2'
+  }
+}
+
+const normalizePayloadForBubble = (payload) => {
+  if (payload === undefined || payload === null || payload === '') return ''
+  if (typeof payload === 'object') {
+    try {
+      return JSON.stringify(payload)
+    } catch (error) {
+      return String(payload)
+    }
+  }
+  return String(payload)
+}
+
+const storeKnxSlimLiveState = (node, status = {}) => {
+  if (!node || !node.id) return
+  const payload = Object.prototype.hasOwnProperty.call(status, 'payload') ? status.payload : node.currentPayload
+  knxSlimLiveState.set(node.id, {
+    id: node.id,
+    topic: node.topic || '',
+    name: node.name || '',
+    dpt: node.dpt || '',
+    listenallga: node.listenallga === true || node.listenallga === 'true',
+    fill: status.fill || '',
+    shape: status.shape || '',
+    text: status.text || '',
+    payload,
+    payloadText: normalizePayloadForBubble(payload),
+    bubbleColor: resolveBubbleColor({ fill: status.fill, payload }),
+    updatedAt: Date.now()
+  })
+}
+
+/* eslint-disable max-len */
+module.exports = function (RED) {
+  if (!buttonEndpointRegistered) {
+    const parseRawValue = (raw) => {
+      if (raw === undefined || raw === null) return undefined
+      if (typeof raw !== 'string') return raw
+      const trimmed = raw.trim()
+      if (trimmed === '') return undefined
+      if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase() === 'true'
+      const numericValue = Number(trimmed)
+      if (!Number.isNaN(numericValue) && trimmed === numericValue.toString()) return numericValue
+      try {
+        return JSON.parse(trimmed)
+      } catch (error) {
+        return trimmed
+      }
+    }
+
+    const coerceValueForDpt = (dpt, rawValue) => {
+      const value = parseRawValue(rawValue)
+      if (!dpt || typeof dpt !== 'string') return value
+      const main = dpt.split('.')[0]
+      switch (main) {
+        case '1':
+        case '2': {
+          if (typeof value === 'boolean') return value
+          if (typeof value === 'number') return value !== 0
+          if (typeof value === 'string') {
+            const lowered = value.trim().toLowerCase()
+            if (['1', 'true', 'on', 'open'].includes(lowered)) return true
+            if (['0', 'false', 'off', 'close', 'closed'].includes(lowered)) return false
+          }
+          throw new Error('Boolean value required for this datapoint')
+        }
+        case '3':
+          if (value && typeof value === 'object') return value
+          throw new Error('Object value required for this datapoint (e.g. {"decr_incr":1,"data":3})')
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+        case '12':
+        case '13':
+        case '14':
+        case '20': {
+          const num = typeof value === 'number' ? value : Number(value)
+          if (Number.isNaN(num)) throw new Error('Numeric value required for this datapoint')
+          return num
+        }
+        case '16':
+          return value !== undefined && value !== null ? String(value) : ''
+        default:
+          return value
+      }
+    }
+
+    const handleButtonAction = (req, res) => {
+      try {
+        const { id } = req.body || {}
+        if (!id) {
+          res.status(400).json({ error: 'Missing node id' })
+          return
+        }
+        const targetNode = RED.nodes.getNode(id)
+        if (!targetNode) {
+          res.status(404).json({ error: 'KNX node not found' })
+          return
+        }
+        if (!targetNode.serverKNX) {
+          res.status(400).json({ error: 'KNX gateway not configured' })
+          return
+        }
+        const mode = (req.body && req.body.mode ? String(req.body.mode) : 'read').toLowerCase()
+        const grpaddr = targetNode.topic
+        const isRawMode = typeof targetNode.dpt === 'string' && targetNode.dpt.trim().toLowerCase() === 'raw'
+        if (mode !== 'read') {
+          if (!grpaddr || String(grpaddr).trim() === '') {
+            res.status(400).json({ error: 'Group address not set' })
+            return
+          }
+          if (!targetNode.dpt || targetNode.dpt === '' || targetNode.dpt === 'auto') {
+            res.status(400).json({ error: 'Datapoint not defined for this node' })
+            return
+          }
+          if (isRawMode) {
+            res.status(400).json({ error: 'Manual write is not available when the node datapoint is set to raw' })
+            return
+          }
+        }
+
+        if (mode === 'read') {
+          if (targetNode.listenallga === true || targetNode.listenallga === 'true') {
+            res.status(400).json({ error: 'Manual read is not available when universal mode is enabled' })
+            return
+          }
+          if (!grpaddr || String(grpaddr).trim() === '') {
+            res.status(400).json({ error: 'Group address not set' })
+            return
+          }
+          targetNode.serverKNX.sendKNXTelegramToKNXEngine({
+            grpaddr,
+            payload: '',
+            dpt: '',
+            outputtype: 'read',
+            nodecallerid: targetNode.id
+          })
+          try {
+            if (typeof targetNode.setNodeStatus === 'function') {
+              targetNode.setNodeStatus({
+                fill: 'blue',
+                shape: 'ring',
+                text: 'BTN->KNX READ',
+                payload: '',
+                GA: grpaddr,
+                dpt: targetNode.dpt,
+                devicename: targetNode.name || ''
+              })
+            }
+            targetNode.sysLogger?.info(`Manual KNX read triggered via editor button for ${grpaddr}`)
+          } catch (error) {
+            targetNode.sysLogger?.warn(`Manual KNX read status update failed: ${error.message}`)
+          }
+          res.json({ status: 'ok' })
+          return
+        }
+
+        if (mode === 'toggle') {
+          if (!/^1\./.test(targetNode.dpt || '')) {
+            res.status(400).json({ error: 'Toggle is available only for datapoint 1.x' })
+            return
+          }
+          if (targetNode.buttonEnabled !== true && targetNode.buttonEnabled !== 'true') {
+            res.status(400).json({ error: 'Button is disabled for this node' })
+            return
+          }
+          if (typeof targetNode._buttonToggleState !== 'boolean') {
+            targetNode._buttonToggleState = coerceBoolean(targetNode.buttonToggleInitial)
+          }
+          targetNode._buttonToggleState = !targetNode._buttonToggleState
+          const payload = targetNode._buttonToggleState
+          targetNode.serverKNX.sendKNXTelegramToKNXEngine({
+            grpaddr,
+            payload,
+            dpt: targetNode.dpt,
+            outputtype: 'write',
+            nodecallerid: targetNode.id
+          })
+          try {
+            if (typeof targetNode.setNodeStatus === 'function') {
+              targetNode.setNodeStatus({
+                fill: 'green',
+                shape: 'dot',
+                text: 'BTN->KNX TOGGLE',
+                payload,
+                GA: grpaddr,
+                dpt: targetNode.dpt,
+                devicename: targetNode.name || ''
+              })
+            }
+            targetNode.sysLogger?.info(`Manual KNX toggle triggered via editor button for ${grpaddr}, value: ${payload}`)
+          } catch (error) {
+            targetNode.sysLogger?.warn(`Manual KNX toggle status update failed: ${error.message}`)
+          }
+          res.json({ status: 'ok', payload })
+          return
+        }
+
+        if (mode === 'value') {
+          if (targetNode.buttonEnabled !== true && targetNode.buttonEnabled !== 'true') {
+            res.status(400).json({ error: 'Button is disabled for this node' })
+            return
+          }
+          const userValue = req.body ? req.body.value : undefined
+          if (userValue === undefined || userValue === null || userValue === '') {
+            res.status(400).json({ error: 'Custom value is required' })
+            return
+          }
+          let payload
+          try {
+            payload = coerceValueForDpt(targetNode.dpt, userValue)
+          } catch (error) {
+            res.status(400).json({ error: error.message })
+            return
+          }
+          targetNode.serverKNX.sendKNXTelegramToKNXEngine({
+            grpaddr,
+            payload,
+            dpt: targetNode.dpt,
+            outputtype: 'write',
+            nodecallerid: targetNode.id
+          })
+          try {
+            if (typeof targetNode.setNodeStatus === 'function') {
+              targetNode.setNodeStatus({
+                fill: 'green',
+                shape: 'dot',
+                text: 'BTN->KNX WRITE',
+                payload,
+                GA: grpaddr,
+                dpt: targetNode.dpt,
+                devicename: targetNode.name || ''
+              })
+            }
+            targetNode.sysLogger?.info(`Manual KNX write triggered via editor button for ${grpaddr}, value: ${JSON.stringify(payload)}`)
+          } catch (error) {
+            targetNode.sysLogger?.warn(`Manual KNX write status update failed: ${error.message}`)
+          }
+          res.json({ status: 'ok', payload })
+          return
+        }
+
+        res.status(400).json({ error: 'Unsupported button mode' })
+      } catch (error) {
+        res.status(500).json({ error: error.message || 'KNX command failed' })
+      }
+    }
+
+    RED.httpAdmin.post('/knxSlim/buttonAction', RED.auth.needsPermission('knxSlim-config.write'), handleButtonAction)
+    RED.httpAdmin.post('/knxSlim/manualRead', RED.auth.needsPermission('knxSlim-config.write'), (req, res) => {
+      if (!req.body) req.body = {}
+      if (!req.body.mode) req.body.mode = 'read'
+      handleButtonAction(req, res)
+    })
+    buttonEndpointRegistered = true
+  }
+
+  if (!liveStateEndpointRegistered) {
+    RED.httpAdmin.get('/knxSlim/editorLiveState', RED.auth.needsPermission('knxSlim-config.read'), (req, res) => {
+      try {
+        const nodes = Array.from(knxSlimLiveState.values())
+        res.json({ nodes, updatedAt: Date.now() })
+      } catch (error) {
+        res.status(500).json({ error: error.message || String(error) })
+      }
+    })
+    liveStateEndpointRegistered = true
+  }
+  const _ = require('lodash')
+  const KNXUtils = require('knxultimate')
+  const payloadRounder = require('./utils/payloadManipulation')
+  const dptlib = require('knxultimate').dptlib
+
+  function knxSlim (config) {
+    RED.nodes.createNode(this, config)
+    const node = this
+    node.serverKNX = RED.nodes.getNode(config.server) || undefined
+    const pushStatus = (status) => {
+      const provider = node.serverKNX
+      if (provider && typeof provider.applyStatusUpdate === 'function') {
+        provider.applyStatusUpdate(node, status)
+      } else {
+        node.status(status)
+      }
+    }
+
+    if (node.serverKNX === undefined) {
+      storeKnxSlimLiveState(node, { fill: 'red', shape: 'dot', text: '[THE GATEWAY NODE HAS BEEN DISABLED]', payload: node.currentPayload })
+      pushStatus({ fill: 'red', shape: 'dot', text: '[THE GATEWAY NODE HAS BEEN DISABLED]' })
+      return
+    }
+
+    // Used to call the status update from the config node.
+    node.setNodeStatus = ({
+      fill, shape, text, payload, GA, dpt, devicename
+    }) => {
+      try {
+        if (node.serverKNX === null) { pushStatus({ fill: 'red', shape: 'dot', text: '[NO GATEWAY SELECTED]' }); return }
+        const rawPayload = payload
+        if (node.icountMessageInWindow == -999) return // Locked out, doesn't change status.
+        const dDate = new Date()
+        const ts = (node.serverKNX && typeof node.serverKNX.formatStatusTimestamp === 'function')
+          ? node.serverKNX.formatStatusTimestamp(dDate, { legacyDayLabel: true })
+          : `day ${dDate.getDate()}, ${dDate.toLocaleTimeString()}`
+        // 30/08/2019 Display only the things selected in the config
+        GA = (typeof GA === 'undefined' || GA == '') ? '' : `(${GA}) `
+        devicename = devicename || ''
+        dpt = (typeof dpt === 'undefined' || dpt == '') ? '' : ` DPT${dpt}`
+        payload = typeof payload === 'object' ? JSON.stringify(payload) : payload
+        const statusText = `${GA + payload + (node.listenallga === true ? ` ${devicename}` : '')} (${ts}) ${text}`
+        storeKnxSlimLiveState(node, { fill, shape, text: statusText, payload: rawPayload })
+        pushStatus({ fill, shape, text: statusText })
+        // 16/02/2020 signal errors to the server
+        if (fill.toUpperCase() === 'RED') {
+          if (node.serverKNX) {
+            const oError = {
+              nodeid: node.id, topic: node.outputtopic, devicename, GA, text
+            }
+            node.serverKNX.reportToWatchdogCalledByKNXSlimNode(oError)
+          }
+        }
+        // Validate the Address to advise the user. The address can be undefined, because the
+        // group address can be set via setConfig
+        if (node.listenallga === false) {
+          try {
+            KNXUtils.validateKNXAddress(node.topic, true)
+          } catch (error) {
+            node.setNodeStatus({
+              fill: 'grey', shape: 'ring', text: 'DISABLED: ' + error.message, payload: '', GA: node.topic, dpt: '', devicename: ''
+            })
+          }
+        }
+      } catch (error) {
+      }
+    }
+
+    // Get the Group Address from various sources
+    if (config.setTopicType === undefined || config.setTopicType === 'str') {
+      node.topic = config.topic
+      node.dpt = (config.dpt === undefined || config.dpt === '') ? '1.001' : config.dpt
+    } else if (config.setTopicType === 'flow') {
+      try {
+        node.topic = node.context().flow.get(config.topic)
+        node.dpt = 'auto'
+        payloadRounder.KNXULtimateChangeConfigByInputMSG({ setConfig: { setGroupAddress: node.topic, setDPT: node.dpt } }, node, config)
+      } catch (error) {
+        node.topic = undefined
+      }
+    } else if (config.setTopicType === 'global') {
+      try {
+        node.topic = node.context().global.get(config.topic)
+        node.dpt = 'auto'
+        payloadRounder.KNXULtimateChangeConfigByInputMSG({ setConfig: { setGroupAddress: node.topic, setDPT: node.dpt } }, node, config)
+      } catch (error) {
+        node.topic = undefined
+      }
+    } else if (config.setTopicType === 'env') {
+      try {
+        node.topic = RED.util.getSetting(node, config.topic) // takes care of the subflow's env vairables
+        node.dpt = 'auto'
+        payloadRounder.KNXULtimateChangeConfigByInputMSG({ setConfig: { setGroupAddress: node.topic, setDPT: node.dpt } }, node, config)
+      } catch (error) {
+        node.topic = undefined
+      }
+    }
+
+    node.outputtopic = (config.outputtopic === undefined || config.outputtopic === '') ? node.topic : config.outputtopic // 07/02/2020 Importante, per retrocompatibilità
+    node.name = config.name
+    node.notifyreadrequest = config.notifyreadrequest || false
+    node.notifyreadrequestalsorespondtobus = config.notifyreadrequestalsorespondtobus || 'false' // Auto respond if notifireadrequest is true
+    node.notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized = config.notifyreadrequestalsorespondtobusdefaultvalueifnotinitialized || ''
+    node.notifyresponse = config.notifyresponse || false
+    node.notifywrite = config.notifywrite
+    node.initialread = config.initialread || 0
+    if (node.initialread === true) node.initialread = 1 // 04/04/2021 Backward compatibility
+    if (node.initialread === false) node.initialread = 0 // 04/04/2021 Backward compatibility
+    node.initialread = Number(config.initialread)
+    node.listenallga = config.listenallga || false
+    node.outputtype = config.outputtype || 'write'// When the node is used as output
+    node.outputRBE = config.outputRBE || 'false' // Apply or not RBE to the output (Messages coming from flow)
+    node.inputRBE = config.inputRBE || 'false' // Apply or not RBE to the input (Messages coming from BUS)
+    // Backward compatibility
+    if (node.outputRBE === true) node.outputRBE = 'true'
+    if (node.outputRBE === false) node.outputRBE = 'false'
+    if (node.inputRBE === true) node.inputRBE = 'true'
+    if (node.inputRBE === false) node.inputRBE = 'false'
+
+    node.currentPayload = '' // Current value for the RBE input and for the .previouspayload msg
+    node._hasCurrentPayload = false // True once we have a meaningful stored value
+    node.icountMessageInWindow = 0 // Used to prevent looping messages
+    node.messageQueue = [] // 01/01/2020 All messages from the flow to the node, will be queued and will be sent separated by 60 milliseconds each. Use uf the underlying api "minimumDelay" is not possible because the telegram order isn't mantained.
+    node.formatmultiplyvalue = (typeof config.formatmultiplyvalue === 'undefined' ? 1 : config.formatmultiplyvalue)
+    node.formatnegativevalue = (typeof config.formatnegativevalue === 'undefined' ? 'leave' : config.formatnegativevalue)
+    node.formatdecimalsvalue = (typeof config.formatdecimalsvalue === 'undefined' ? 999 : config.formatdecimalsvalue)
+    node.passthrough = (typeof config.passthrough === 'undefined' ? 'no' : config.passthrough)
+    node.inputmessage = {} // Stores the input message to be passed through
+    node.timerTTLInputMessage = null // The stored node.inputmessage has a ttl.
+    node.buttonEnabled = (typeof config.buttonEnabled === 'undefined') ? true : coerceBoolean(config.buttonEnabled)
+    node.buttonMode = config.buttonMode || 'toggle'
+    node.buttonStaticValue = config.buttonStaticValue || ''
+    node.buttonToggleInitial = coerceBoolean(config.buttonToggleInitial)
+    node._buttonToggleState = node.buttonToggleInitial
+    storeKnxSlimLiveState(node, {
+      fill: 'grey',
+      shape: 'ring',
+      text: 'Waiting for KNX traffic',
+      payload: node.currentPayload
+    })
+    node.periodicSend = coerceBoolean(config.periodicSend)
+    node.periodicSendInterval = Number(config.periodicSendInterval)
+    if (!Number.isFinite(node.periodicSendInterval) || node.periodicSendInterval <= 0) node.periodicSendInterval = 0
+    node.timerPeriodicSend = null
+
+    const syncButtonToggleState = (value) => {
+      if (node.buttonMode === 'toggle' && /^1\./.test(node.dpt || '')) {
+        node._buttonToggleState = coerceBoolean(value)
+      }
+    }
+
+    const clearPeriodicSendTimer = () => {
+      if (node.timerPeriodicSend !== null) {
+        try { clearInterval(node.timerPeriodicSend) } catch (e) { /* noop */ }
+        node.timerPeriodicSend = null
+      }
+    }
+
+    const startPeriodicSendTimer = () => {
+      clearPeriodicSendTimer()
+      if (node.listenallga === true) return
+      if (node.periodicSend !== true) return
+      if (!Number.isFinite(node.periodicSendInterval) || node.periodicSendInterval <= 0) return
+
+      const intervalMs = Math.max(1000, Math.round(node.periodicSendInterval * 1000))
+      node.timerPeriodicSend = setInterval(() => {
+        try {
+          if (node._hasCurrentPayload !== true) return
+          if (!node.serverKNX || node.serverKNX.linkStatus !== 'connected') return
+          if (!node.serverKNX.knxConnection) return
+          if (node.listenallga === true) return
+          if (typeof node.topic !== 'string' || node.topic === '') return
+          if (typeof node.dpt !== 'string' || node.dpt === '' || node.dpt === 'auto') return
+          if (node.dpt.trim().toLowerCase() === 'raw') return
+
+          node.serverKNX.sendKNXTelegramToKNXEngine({
+            grpaddr: node.topic,
+            payload: node.currentPayload,
+            dpt: node.dpt,
+            outputtype: 'write',
+            nodecallerid: node.id
+          })
+        } catch (error) {
+          try { node.sysLogger?.debug(`Periodic send failed: ${error.message}`) } catch (e) { /* noop */ }
+        }
+      }, intervalMs)
+    }
+    try {
+      const baseLogLevel = (node.serverKNX && node.serverKNX.loglevel) ? node.serverKNX.loglevel : 'error'
+      node.sysLogger = new loggerClass({ loglevel: baseLogLevel, setPrefix: node.type + ' <' + (node.name || node.id || '') + '>' })
+    } catch (error) { console.log(error.stack) }
+    node.sendMsgToKNXCode = config.sendMsgToKNXCode || undefined
+    node.receiveMsgFromKNXCode = config.receiveMsgFromKNXCode || undefined
+    if (node.sendMsgToKNXCode === '') node.sendMsgToKNXCode = undefined
+    if (node.receiveMsgFromKNXCode === '') node.receiveMsgFromKNXCode = undefined
+
+    // Check if the node has a valid dpt
+    if (node.listenallga === false) {
+      if (node.dpt === undefined || node.dpt === '') {
+        node.setNodeStatus({
+          fill: 'red', shape: 'dot', text: 'The Datapoint cannot be empty.', payload: '', GA: '', dpt: '', devicename: ''
+        })
+        return
+      }
+    }
+
+    const pendingGAReads = new Map()
+    const findExposedGA = (ga) => {
+      if (!node.serverKNX) return undefined
+      if (typeof node.serverKNX.getExposedGAEntry === 'function') return node.serverKNX.getExposedGAEntry(ga)
+      return Array.isArray(node.serverKNX.exposedGAs) ? node.serverKNX.exposedGAs.find(a => a.ga === ga) : undefined
+    }
+
+    // Used in the KNX Function TAB
+    const getGAValue = async function getGAValue (_ga = undefined, _dpt = undefined, _requestReadIfMissing = undefined) {
+      if (_ga === undefined) return null
+      // Strip devicename if present (e.g. "1/1/1 Light name" → "1/1/1")
+      const blankSpacePosition = _ga.indexOf(' ')
+      if (blankSpacePosition > -1) _ga = _ga.substring(0, blankSpacePosition)
+
+      // Overloads:
+      // - getGAValue('1/1/1')
+      // - getGAValue('1/1/1', '1.001')
+      // - getGAValue('1/1/1', '1.001', false)
+      // - getGAValue('1/1/1', false)
+      let dptRequested = _dpt
+      let requestReadIfMissing = _requestReadIfMissing
+      if (typeof dptRequested === 'boolean' && requestReadIfMissing === undefined) {
+        requestReadIfMissing = dptRequested
+        dptRequested = undefined
+      }
+      if (requestReadIfMissing === undefined) requestReadIfMissing = true
+
+      const tryDecode = (rawValue, dpt) => {
+        try {
+          if (rawValue === null || rawValue === undefined) return undefined
+          return dptlib.fromBuffer(rawValue, dptlib.resolve(dpt))
+        } catch (_e) { return undefined }
+      }
+
+      const sendRead = () => {
+        try {
+          node.serverKNX.sendKNXTelegramToKNXEngine({
+            grpaddr: _ga, payload: '', dpt: '', outputtype: 'read', nodecallerid: node.id
+          })
+          RED.log.warn('getGAValue: sent groupvalue_read for ' + _ga)
+        } catch (e) {
+          RED.log.error('getGAValue: failed to send read for ' + _ga + ': ' + e.message)
+        }
+      }
+
+      // Check cache first
+      let found = findExposedGA(_ga)
+      if (found !== undefined) {
+        const dptFinal = dptRequested || found.dpt
+        if (!dptFinal) {
+          RED.log.error('getGAValue: no DPT for ' + _ga + '. Provide it as second parameter.')
+          return null
+        }
+        const val = tryDecode(found.rawValue, dptFinal)
+        if (val !== undefined) return val
+        // rawValue present but decode failed (bad format) — fall through to read, unless cache-only mode is requested.
+        if (requestReadIfMissing === false) return undefined
+        RED.log.warn('getGAValue: cached rawValue for ' + _ga + ' could not be decoded, sending read request')
+      }
+
+      if (requestReadIfMissing === false) return undefined
+
+      // Not cached or decode failed: send read and poll up to 3 seconds.
+      // Deduplicate concurrent reads to the same GA to avoid repeated bus reads and repeated polling loops.
+      let pendingRead = pendingGAReads.get(_ga)
+      if (!pendingRead) {
+        pendingRead = (async () => {
+          sendRead()
+          for (let i = 0; i < 30; i++) {
+            await new Promise(resolve => setTimeout(resolve, 100))
+            const updated = findExposedGA(_ga)
+            if (updated !== undefined) return updated
+          }
+          return null
+        })().finally(() => pendingGAReads.delete(_ga))
+        pendingGAReads.set(_ga, pendingRead)
+      }
+      found = await pendingRead
+      if (found !== null && found !== undefined) {
+        const dptFinal = dptRequested || found.dpt
+        if (!dptFinal) return null
+        const val = tryDecode(found.rawValue, dptFinal)
+        if (val !== undefined) return val
+      }
+      RED.log.warn('getGAValue: no response from KNX bus for ' + _ga + ' within 3 seconds')
+      return null
+    }
+    // Used in the KNX Function TAB
+    const setGAValue = function setGAValue (_ga = undefined, _value = undefined, _dpt = undefined) {
+      try {
+        if (_ga === undefined) return
+        // The GA can have the devicename as well, separated by a blank space (1/1/0 light table ovest),
+        // I must take the GA only
+        const blankSpacePosition = _ga.indexOf(' ')
+        if (blankSpacePosition > -1) _ga = _ga.substring(0, blankSpacePosition)
+        if (_dpt === undefined) {
+          // Try getting dpt from ETS CSV
+          const found = findExposedGA(_ga)
+          if (found === undefined || found.dpt === undefined) {
+            const errM = 'setGAValue: node ID:' + node.id + ' ' + 'No CSV file imported. Please provide the dpt manually'
+            RED.log.error(errM)
+            if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(errM)
+            return
+          }
+        }
+        node.serverKNX.sendKNXTelegramToKNXEngine({
+          grpaddr: _ga, payload: _value, dpt: _dpt, outputtype: 'write', nodecallerid: node.id
+        })
+      } catch (error) {
+        const errM = 'setGAValue: node ID:' + node.id + ' ' + error.stack
+        RED.log.error(errM)
+        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(errM)
+      }
+    }
+    // Used in the KNX Function TAB
+    const self = function self (_value) {
+      try {
+        node.serverKNX.sendKNXTelegramToKNXEngine({
+          grpaddr: node.topic, payload: _value, dpt: node.dpt, outputtype: 'write', nodecallerid: node.id
+        })
+      } catch (error) {
+        const errM = 'self: node ID:' + node.id + ' ' + error.stack
+        RED.log.error(errM)
+        if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(errM)
+      }
+    }
+    // Used in the KNX Function TAB
+    const toggle = function toggle () {
+      if (node.currentPayload === true || node.currentPayload === false) {
+        try {
+          node.serverKNX.sendKNXTelegramToKNXEngine({
+            grpaddr: node.topic, payload: !node.currentPayload, dpt: node.dpt, outputtype: 'write', nodecallerid: node.id
+          })
+        } catch (error) {
+          const errM = 'toggle: node ID:' + node.id + ' ' + error.stack
+          RED.log.error(errM)
+          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(errM)
+        }
+      }
+    }
+
+    // This function is called by the knx-slim config node, to output a msg.payload.
+    node.handleSend = async (msg) => {
+      // 27/03/2020 can i merge the last input msg arrived, with the output?
+      try {
+        if (node.passthrough === 'yes') {
+          // Respect the order! Object.assign(target, master). On master will be copied to target and properties of master will overwrite the same properties on target!
+          if (node.timerTTLInputMessage !== null) clearTimeout(node.timerTTLInputMessage)
+          msg = Object.assign(RED.util.cloneMessage(node.inputmessage), msg)
+          node.inputmessage = {}
+        } else if (node.passthrough === 'yesownprop') {
+          // Yes, but in an own prop
+          if (node.timerTTLInputMessage !== null) clearTimeout(node.timerTTLInputMessage)
+          msg.inputmessage = RED.util.cloneMessage(node.inputmessage)
+          node.inputmessage = {}
+        }
+      } catch (error) { }
+
+      // Update stored value from KNX telegrams (used for RBE, button toggle sync and optional periodic send).
+      try {
+        const evt = msg && msg.knx ? msg.knx.event : undefined
+        if ((evt === 'GroupValue_Write' || evt === 'GroupValue_Response') && Object.prototype.hasOwnProperty.call(msg, 'payload')) {
+          node.currentPayload = msg.payload
+          node._hasCurrentPayload = true
+          syncButtonToggleState(msg.payload)
+        }
+      } catch (error) { /* noop */ }
+
+      // #region "Inject the msg to the JS code, then output msg to the flow"
+      // -+++++++++++++++++++++++++++++++++++++++++++
+      if (node.receiveMsgFromKNXCode !== undefined) {
+        try {
+          const receiveMsgFromKNXCode = (new (Object.getPrototypeOf(async function () { }).constructor)('msg', 'getGAValue', 'node', 'RED', 'self', 'toggle', 'setGAValue', node.receiveMsgFromKNXCode))
+          msg = await receiveMsgFromKNXCode(msg, getGAValue, node, RED, self, toggle, setGAValue)
+        } catch (error) {
+          RED.log.error('knxSlim: receiveMsgFromKNXCode: node ID:' + node.id + ' ' + error.message)
+          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`receiveMsgFromKNXCode: node id ${node.id} ` || ' ' + error.stack)
+          return
+        }
+      }
+      // -+++++++++++++++++++++++++++++++++++++++++++
+      // #endregion
+      // if (msg.echoed !== undefined && msg.echoed === true) {
+      //   node.setNodeStatus({
+      //     fill: 'grey', shape: 'dot', text: 'Output echoed msg', payload: '', GA: node.topic, dpt: '', devicename: '',
+      //   });
+      // }
+      if (msg !== undefined) node.send(msg)
+    }
+
+    node.on('input', async (msg) => {
+      if (typeof msg === 'undefined') return
+      if (!node.serverKNX) return // 29/08/2019 Server not instantiate
+
+      // 11/01/2021 Accept properties change from msg
+      // *********************************
+      if (msg.hasOwnProperty('setConfig')) {
+        payloadRounder.KNXULtimateChangeConfigByInputMSG(msg, node, config)
+        return
+      }
+      // *********************************
+
+      // 16/06/2024 Check wether the node has a group address set.
+      // Validate the Address
+      if (node.listenallga === false) {
+        try {
+          KNXUtils.validateKNXAddress(node.topic, true)
+        } catch (error) {
+          node.setNodeStatus({
+            fill: 'red', shape: 'dot', text: error.message, payload: '', GA: node.topic, dpt: '', devicename: ''
+          })
+          return
+        }
+      }
+
+      // 19/06/2022 Reset the RBE filter https://github.com/Supergiovane/node-red-contrib-knx-ultimate/issues/191
+      // *********************************
+      if (msg.hasOwnProperty('resetRBE')) {
+        node.currentPayload = ''
+        node._hasCurrentPayload = false
+        node.setNodeStatus({
+          fill: 'grey', shape: 'ring', text: 'Reset RBE filter on this node.', payload: '', GA: '', dpt: '', devicename: ''
+        })
+        return
+      }
+      // *********************************
+
+      if (node.passthrough !== 'no') { // 27/03/2020 Save the input message to be passed out to msg output
+        // The msg has a TTL of 3 seconds
+        if (node.timerTTLInputMessage !== null) clearTimeout(node.timerTTLInputMessage)
+        node.timerTTLInputMessage = setTimeout(() => { node.inputmessage = {} }, 3000)
+        node.inputmessage = RED.util.cloneMessage(msg) // 28/03/2020 Store the message to be passed through.
+      }
+
+      // #region "Inject the msg to the JS code, then output msg to the flow"
+      // -+++++++++++++++++++++++++++++++++++++++++++
+      if (node.sendMsgToKNXCode !== undefined) {
+        try {
+          const sendMsgToKNXCode = (new (Object.getPrototypeOf(async function () { }).constructor)('msg', 'getGAValue', 'node', 'RED', 'self', 'toggle', 'setGAValue', node.sendMsgToKNXCode))
+          msg = await sendMsgToKNXCode(msg, getGAValue, node, RED, self, toggle, setGAValue)
+          if (msg === undefined) return
+        } catch (error) {
+          RED.log.error('knxSlim: sendMsgToKNXCode: node ID:' + node.id + ' ' + error.message)
+          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`sendMsgToKNXCode: node id ${node.id} ` || ' ' + error.stack)
+          return
+        }
+      }
+      // -+++++++++++++++++++++++++++++++++++++++++++
+      // #endregion
+
+      // 25/07/2019 if payload is read or the Telegram type is set to "read", do a read, otherwise, write to the bus
+      if ((msg.hasOwnProperty('readstatus') && msg.readstatus === true) || node.outputtype === 'read' || (msg.hasOwnProperty('event') && msg.event === 'GroupValue_Read')) {
+        // READ: Send a Read request to the bus
+        let grpaddr = ''
+        if (node.listenallga == false) {
+          grpaddr = node.topic
+          if (msg.hasOwnProperty('destination')) grpaddr = msg.destination
+          // 29/12/2020 Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
+          if (msg.hasOwnProperty('knx')) {
+            if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Response' || msg.knx.event === 'GroupValue_Read'))) {
+              if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection during READ. The node ${node.id} has been temporary disabled. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
+              const t = setTimeout(() => { // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+                node.setNodeStatus({
+                  fill: 'red', shape: 'ring', text: `DISABLED due to a circulare reference while READ (${grpaddr}).`, payload: '', GA: '', dpt: '', devicename: ''
+                })
+              }, 1000)
+              return
+            }
+          }
+          node.setNodeStatus({
+            fill: 'grey', shape: 'dot', text: 'Read', payload: '', GA: grpaddr, dpt: '', devicename: ''
+          })
+          node.serverKNX.sendKNXTelegramToKNXEngine({
+            grpaddr, payload: '', dpt: '', outputtype: 'read', nodecallerid: node.id
+          })
+        } else { // Listen all GAs
+          if (msg.hasOwnProperty('destination')) {
+            // listenallga is true, but the user specified own group address
+            grpaddr = msg.destination
+            // 29/12/2020 Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
+            if (msg.hasOwnProperty('knx')) {
+              if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Response' || msg.knx.event === 'GroupValue_Read'))) {
+                if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection during READ-2. The node ${node.id} has been temporary disabled. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
+                const t = setTimeout(() => { // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+                  node.setNodeStatus({
+                    fill: 'red', shape: 'ring', text: `DISABLED due to a circulare reference while READ-2 (${grpaddr}).`, payload: '', GA: '', dpt: '', devicename: ''
+                  })
+                }, 1000)
+                return
+              }
+            }
+            node.serverKNX.sendKNXTelegramToKNXEngine({
+              grpaddr, payload: '', dpt: '', outputtype: 'read', nodecallerid: node.id
+            })
+          } else {
+            // Issue read to all group addresses
+            // 25/10/2019 the user is able not import the csv, so i need to check for it. This option should be unckecked by the knxSlim html config, but..
+            if (typeof node.serverKNX.csv !== 'undefined') {
+              let delay = 0
+              for (let index = 0; index < node.serverKNX.csv.length; index++) {
+                const element = node.serverKNX.csv[index]
+                const grpaddr = element.ga
+                // 29/12/2020 Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
+                if (msg.hasOwnProperty('knx')) {
+                  if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Response' || msg.knx.event === 'GroupValue_Read'))) {
+                    if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection during READ-3. Node ${node.id} The read request hasn't been sent. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
+                    node.setNodeStatus({
+                      fill: 'red', shape: 'ring', text: `NOT SENT due to a circulare reference while READ-3 (${grpaddr}).`, payload: '', GA: '', dpt: '', devicename: ''
+                    })
+                  }
+                } else {
+                  node.serverKNX.sendKNXTelegramToKNXEngine({
+                    grpaddr, payload: '', dpt: '', outputtype: 'read', nodecallerid: node.id
+                  })
+                  const t = setTimeout(() => { // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+                    // Timeout is only for the status update.
+                    node.setNodeStatus({
+                      fill: 'grey', shape: 'dot', text: 'Add Read to queue...', payload: '', GA: grpaddr, dpt: element.dpt, devicename: element.devicename
+                    })
+                  }, delay)
+                  delay += 10
+                }
+              }
+            } else {
+              // No csv. A chi cavolo dovrei mandare la richiesta read?
+              const t = setTimeout(() => { // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+                // Timeout is only for the status update.
+                node.setNodeStatus({
+                  fill: 'red', shape: 'dot', text: "Read: ETS file not set, i don't know where to send the read request.", payload: '', GA: '', dpt: '', devicename: node.name
+                })
+                if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`KNX-Slim: ETS file not set, i don't know where to send the read request. I'm the node ${node.id}`)
+              }, 100)
+            }
+          }
+        }
+      } else {
+        if (node.listenallga === false) {
+          // 23/12/2020 Applying RBE filter
+          if (node.outputRBE === 'true') {
+            // 19/01/2023 CHECKING THE INPUT PAYLOAD (ROUND, ETC) BASED ON THE NODE CONFIG
+            //* ********************************************************
+            const pTest = payloadRounder.Manipulate(node, msg.payload)
+            //* ********************************************************
+
+            if (_.isEqual(node.currentPayload, pTest)) {
+              // RBE kicks in, doesn't send the payload
+              node.setNodeStatus({
+                fill: 'grey', shape: 'ring', text: `rbe block (${msg.payload}) to KNX`, payload: '', GA: '', dpt: '', devicename: ''
+              })
+              return
+            }
+          }
+        }
+        // 07/02/2020 Revamped flood protection (avoid accepting too many messages as input)
+        if (node.icountMessageInWindow == -999) return // Locked out
+        if (node.icountMessageInWindow == 0) {
+          const t = setTimeout(() => { // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+            if (node.icountMessageInWindow >= 120) {
+              // Looping detected
+              node.setNodeStatus({
+                fill: 'red', shape: 'ring', text: 'DISABLED! Flood protection! Too many msg at the same time.', payload: '', GA: '', dpt: '', devicename: ''
+              })
+              if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Node ${node.id} has been disabled due to Flood Protection. Too many messages in a timeframe. Check your flow's design or use RBE option.`)
+              node.icountMessageInWindow = -999 // Lock out node
+            } else { node.icountMessageInWindow = -1 }
+          }, 1000)
+        }
+        node.icountMessageInWindow += 1
+
+        // OUTPUT: Send message to the bus (write/response)
+        if (node.serverKNX.knxConnection) {
+          let { outputtype } = node
+          let grpaddr = ''
+          let dpt = ''
+
+          // 29/12/2020 Check wheter the input message contains the "event" property, that overwrite the node's outputtype
+          if (msg.hasOwnProperty('event')) {
+            if (msg.event === 'GroupValue_Write') outputtype = 'write'
+            if (msg.event === 'GroupValue_Response') outputtype = 'response'
+            if (msg.event === 'Update_NoWrite') outputtype = 'update' // 05/01/2021 Doesn't send anything to the bus. Only updates the node currentPayload
+          }
+
+          if (node.listenallga === true) {
+            // The node is set to Universal mode (listen to all Group Addresses). Some fields are needed
+            if (msg.hasOwnProperty('destination')) {
+              grpaddr = msg.destination
+            } else {
+              node.setNodeStatus({
+                fill: 'red', shape: 'dot', text: 'msg.destination not set!', payload: '', GA: '', dpt: '', devicename: ''
+              })
+              return
+            }
+            if (msg.hasOwnProperty('dpt') && msg.dpt !== undefined && msg.dpt !== '') {
+              dpt = msg.dpt
+            } else {
+              // No datapoint set. If the CSV is loaded, try to get it from there.
+              if (!msg.hasOwnProperty('writeraw')) { // In raw mode, Datapoint is useless
+                // Get the datapoint from the CSV
+                if (typeof node.serverKNX.csv !== 'undefined') {
+                  const oGA = node.serverKNX.csv.filter((sga) => sga.ga == grpaddr)[0]
+                  if (oGA !== undefined) {
+                    dpt = oGA.dpt
+                  } else {
+                    node.setNodeStatus({
+                      fill: 'red', shape: 'dot', text: 'msg.dpt not set and not found in the CSV!', payload: '', GA: '', dpt: '', devicename: ''
+                    })
+                    if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`node id: ${node.id} ` + 'msg.dpt not set and not found in the CSV!')
+                    return
+                  }
+                } else {
+                  node.setNodeStatus({
+                    fill: 'red', shape: 'dot', text: "msg.dpt not set and there's no CSV to search for!", payload: '', GA: '', dpt: '', devicename: ''
+                  })
+                  if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`node id: ${node.id} ` + 'msg.dpt not set and there\'s no CSV to search for!')
+                  return
+                }
+              }
+            }
+          } else {
+            grpaddr = msg.hasOwnProperty('destination') ? msg.destination : node.topic
+            dpt = (msg.hasOwnProperty('dpt') && msg.dpt !== undefined && msg.dpt !== '') ? msg.dpt : node.dpt
+          }
+
+          // Protection over circular references (for example, if you link two Slim Nodes toghether with the same group address), to prevent infinite loops
+          if (msg.hasOwnProperty('knx')) {
+            if (msg.knx.destination == grpaddr && ((msg.knx.event === 'GroupValue_Write' && outputtype === 'write') || (msg.knx.event === 'GroupValue_Response' && outputtype === 'response') || (msg.knx.event === 'GroupValue_Response' && outputtype === 'read') || (msg.knx.event === 'GroupValue_Read' && outputtype === 'read'))) {
+              if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.error(`Circular reference protection. The node ${node.id} has been temporarely disabled. Two nodes with same group address and reaction/Telegram type are linked. See the FAQ in the Wiki. Msg:${JSON.stringify(msg)}`)
+              const t = setTimeout(() => { // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+                node.setNodeStatus({
+                  fill: 'red', shape: 'ring', text: `DISABLED due to a circulare reference (${grpaddr}).`, payload: '', GA: '', dpt: '', devicename: ''
+                })
+              }, 1000)
+              return
+            }
+          }
+
+          // 01/12/2020 Write RAW added.
+          //  If you encode the values by yourself, you can write raw buffers with writeRaw(groupaddress: string, buffer: Buffer, bitlength?: Number, callback?: () => void).
+          // The third (optional) parameter bitlength is necessary for datapoint types where the bitlength does not equal the buffers bytelength * 8. This is the case for dpt 1 (bitlength 1), 2 (bitlength 2) and 3 (bitlength 4). For other dpts the paramter can be omitted.
+          // // Write raw buffer to a groupaddress with dpt 1 (e.g light on = value true = Buffer<01>) with a bitlength of 1
+          // connection.writeRaw('1/0/0', Buffer.from('01', 'hex'), 1)
+          // // Write raw buffer to a groupaddress with dpt 9 (e.g temperature 18.4 °C = Buffer<0730>) without bitlength
+          // connection.writeRaw('1/0/0', Buffer.from('0730', 'hex'))
+          if (msg.hasOwnProperty('writeraw') && msg.hasOwnProperty('writeraw') !== null) {
+            try {
+              const rawBitlength = msg.hasOwnProperty('bitlength') && msg.bitlength !== null
+                ? msg.bitlength
+                : (msg.hasOwnProperty('bitlenght') && msg.bitlenght !== null ? msg.bitlenght : null)
+              if (rawBitlength !== null) {
+                node.serverKNX.knxConnection.writeRaw(grpaddr, msg.writeraw, rawBitlength)
+              } else {
+                node.serverKNX.knxConnection.writeRaw(grpaddr, msg.writeraw)
+              }
+              node.setNodeStatus({
+                fill: 'green', shape: 'dot', text: 'RAW Write', payload: '', GA: grpaddr, dpt: '', devicename: ''
+              })
+            } catch (error) {
+              node.setNodeStatus({
+                fill: 'red', shape: 'dot', text: `Error RAW Write: ${error}`, payload: '', GA: grpaddr, dpt: '', devicename: ''
+              })
+            }
+            return
+          }
+
+          if (typeof dpt === 'string' && dpt.trim().toLowerCase() === 'raw') {
+            node.setNodeStatus({
+              fill: 'red',
+              shape: 'dot',
+              text: 'RAW mode accepts only msg.writeraw for outgoing telegrams',
+              payload: '',
+              GA: grpaddr,
+              dpt: '',
+              devicename: ''
+            })
+            node.sysLogger?.error(`node id: ${node.id} RAW mode accepts only msg.writeraw for outgoing telegrams (${grpaddr})`)
+            return
+          }
+
+          if (outputtype == 'response') {
+            try {
+              node.currentPayload = msg.payload// 31/12/2019 Set the current value (because, if the node is a virtual device, then it'll never fire "GroupValue_Write" in the server node, causing the currentPayload to never update)
+              node._hasCurrentPayload = true
+              syncButtonToggleState(msg.payload)
+              node.serverKNX.sendKNXTelegramToKNXEngine({
+                grpaddr, payload: msg.payload, dpt, outputtype, nodecallerid: node.id
+              })
+              node.setNodeStatus({
+                fill: 'blue', shape: 'dot', text: 'Responding', payload: msg.payload, GA: grpaddr, dpt, devicename: ''
+              })
+            } catch (error) { }
+          } else if (outputtype == 'update') {
+            // 05/01/2021 Updates only the internal currentPayload value.
+            try {
+              node.currentPayload = msg.payload
+              node._hasCurrentPayload = true
+              syncButtonToggleState(msg.payload)
+              node.serverKNX.sendKNXTelegramToKNXEngine({
+                grpaddr, payload: msg.payload, dpt, outputtype, nodecallerid: node.id
+              })
+              node.setNodeStatus({
+                fill: 'grey', shape: 'dot', text: 'Updating internal value', payload: msg.payload, GA: grpaddr, dpt, devicename: ''
+              })
+            } catch (error) { }
+          } else {
+            try {
+              node.currentPayload = msg.payload// 31/12/2019 Set the current value (because, if the node is a virtual device, then it'll never fire "GroupValue_Write" in the server node, causing the currentPayload to never update)
+              node._hasCurrentPayload = true
+              syncButtonToggleState(msg.payload)
+              node.setNodeStatus({
+                fill: 'green', shape: 'dot', text: 'Writing', payload: msg.payload, GA: grpaddr, dpt, devicename: ''
+              })
+              // if (node.serverKNX.linkStatus === "connected") {
+              node.serverKNX.sendKNXTelegramToKNXEngine({
+                grpaddr, payload: msg.payload, dpt, outputtype, nodecallerid: node.id
+              })
+            } catch (error) { }
+          }
+        }
+      }
+    })
+
+    node.on('close', (done) => {
+      if (node.timerTTLInputMessage !== null) clearTimeout(node.timerTTLInputMessage)
+      clearPeriodicSendTimer()
+      node.inputmessage = {}
+      knxSlimLiveState.delete(node.id)
+      if (node.serverKNX) {
+        node.serverKNX.removeClient(node)
+        try {
+          if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.info(`Close: node id ${node.id} with topic ${node.topic || ''} has been removed from the server.`)
+        } catch (error) { }
+      }
+      done()
+    })
+
+    // On each deploy, add the node to the server list
+    if (node.serverKNX) {
+      node.serverKNX.addClient(node)
+      if (node.sysLogger !== undefined && node.sysLogger !== null) node.sysLogger.info(`addClient: node id ${node.id}` || '' + ` with topic ${node.topic || ''} has been added to the server.`)
+      // 05/11/2021 if the node is set to read from bus, issue a read.
+      // "node-input-initialread0": "No",
+      // "node-input-initialread1": "Leggi dal BUS KNX",
+      // "node-input-initialread2": "Leggi l'ultimo valore salvato su file prima della disconnessione.",
+      // "node-input-initialread3": "Leggi l'ultimo valore salvato su file prima della disconnessione. Se inesistente, leggi dal BUS KNX",
+      if (node.serverKNX.linkStatus === 'connected' && node.initialread === 1 || node.initialread === 3) {
+        node.setNodeStatus({
+          fill: 'yellow', shape: 'dot', text: 'Get value from BUS.', payload: '', GA: node.topic || '', dpt: '', devicename: ''
+        })
+        const t = setTimeout(() => { // 21/03/2022 fixed possible memory leak. Previously was setTimeout without "let t = ".
+          node.emit('input', { readstatus: true })
+        }, 3000)
+      }
+    }
+
+    // Start periodic send timer (optional)
+    startPeriodicSendTimer()
+  }
+  RED.nodes.registerType('knxSlim', knxSlim)
+}

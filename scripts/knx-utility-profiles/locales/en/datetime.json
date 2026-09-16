@@ -1,5 +1,5 @@
 {
-  "knxUltimateDateTime": {
+  "knxSlimDateTime": {
     "title": "Date/Time",
     "paletteLabel": "DateTime",
     "node-input-server": "KNX Gateway",

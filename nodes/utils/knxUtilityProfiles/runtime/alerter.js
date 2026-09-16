@@ -1,6 +1,6 @@
 // Private KNX Utility profile. Independent of the legacy palette entry point.
 module.exports = function (RED) {
-  function knxUltimateAlerter (config) {
+  function knxSlimAlerter (config) {
     const path = require('path')
     // const Address = require('knxultimate')
     // const KnxConstants = require('knxultimate/protocol/KNXConstants')
@@ -85,7 +85,7 @@ module.exports = function (RED) {
       }
     }
 
-    // This function is called by the knx-ultimate config node, to output a msg.payload.
+    // This function is called by the knx-slim config node, to output a msg.payload.
     node.handleSend = msg => {
       let bFound = false // 24/04/2021 true if the cycle below found a match, otherwise false
 
@@ -166,7 +166,7 @@ module.exports = function (RED) {
       }
     }
 
-    // 24/04/2021 perform a read on all GA in the rule list. Called both from node.on("input") and knxUltimate-config
+    // 24/04/2021 perform a read on all GA in the rule list. Called both from node.on("input") and knxSlim-config
     node.initialReadAllDevicesInRules = () => {
       if (node.serverKNX) {
         node.setLocalStatus({ fill: 'grey', shape: 'ring', text: 'Reasy', payload: '', GA: '', dpt: '', devicename: '' })
@@ -301,5 +301,5 @@ module.exports = function (RED) {
       }
     }
   }
-  RED.nodes.registerType('knxUltimateAlerter', knxUltimateAlerter)
+  RED.nodes.registerType('knxSlimAlerter', knxSlimAlerter)
 }

@@ -46,7 +46,7 @@
   },
   {
     "id": "knx_bool_1",
-    "type": "knxUltimate",
+    "type": "knxSlim",
     "z": "tab_osc_knx_fn",
     "server": "osc_knx_cfg_1",
     "topic": "1/1/1",
@@ -73,7 +73,7 @@
   },
   {
     "id": "knx_int_1",
-    "type": "knxUltimate",
+    "type": "knxSlim",
     "z": "tab_osc_knx_fn",
     "server": "osc_knx_cfg_1",
     "topic": "1/1/2",
@@ -130,7 +130,7 @@
   },
   {
     "id": "osc_knx_cfg_1",
-    "type": "knxUltimate-config",
+    "type": "knxSlim-config",
     "z": "",
     "host": "224.0.23.12",
     "port": "3671",

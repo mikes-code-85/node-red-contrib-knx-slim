@@ -38,7 +38,7 @@ const readPrivateTranslations = () => {
     Object.entries(profiles).forEach(([utilityType, nodeType]) => {
       const localePath = path.join(privateSourceRoot, 'locales', locale, `${utilityType}.json`)
       // Keep dictionaries indexed by the historical namespace. Existing editor
-      // code uses keys such as `knxUltimateDateTime.gaDate`; the name is now only
+      // code uses keys such as `knxSlimDateTime.gaDate`; the name is now only
       // an internal namespace and does not require that node type to be loaded.
       translations[locale][nodeType] = JSON.parse(fs.readFileSync(localePath, 'utf8'))
     })
@@ -86,7 +86,7 @@ const createEditorBundle = () => {
   // require the same artifact through CommonJS without maintaining a test copy.
   const api = factory(root)
   if (typeof module === 'object' && module.exports) module.exports = api
-  if (root) root.KNXUltimateUtilityProfiles = api
+  if (root) root.KNXSlimUtilityProfiles = api
 }(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict'
 
@@ -128,7 +128,7 @@ ${templateEntries}
     return Object.prototype.hasOwnProperty.call(PROFILE_TRANSLATIONS, shortLocale) ? shortLocale : 'en'
   }
 
-  const UTILITY_LOCALE_KEY = 'node-red-contrib-knx-ultimate/knxUltimateUtility:knxUltimateUtility.locale'
+  const UTILITY_LOCALE_KEY = 'node-red-contrib-knx-slim/knxSlimUtility:knxSlimUtility.locale'
 
   const nodeRedLocale = (RED) => {
     try {
@@ -231,7 +231,7 @@ ${templateEntries}
 
   const getTemplate = (utilityType) => PROFILE_TEMPLATES[normalizeUtilityType(utilityType)]
 
-  // Expose only the narrow API consumed by knxUltimateUtility.html and
+  // Expose only the narrow API consumed by knxSlimUtility.html and
   // tests. The implementation tables remain private and cannot be mutated.
   return Object.freeze({
     PROFILE_TYPES,
